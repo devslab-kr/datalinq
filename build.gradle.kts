@@ -32,9 +32,16 @@ dependencies {
 }
 
 // Java 25 (best virtual-thread + JDBC behaviour; no synchronized pinning).
+// A toolchain so `./gradlew run` works no matter which JDK launches Gradle - Gradle
+// locates a JDK 25 (auto-detected, e.g. from ~/.jdks) for compiling and running.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    options.release.set(25)
 }
 
 tasks.test {
