@@ -32,6 +32,14 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Engine integration tests run against real databases (cross-vendor: PostgreSQL -> MariaDB)
+    // via Testcontainers - H2/mocks would miss dialect, transaction and driver behaviour. The
+    // JDBC drivers themselves are already on the classpath (implementation, above).
+    testImplementation(platform("org.testcontainers:testcontainers-bom:1.20.4"))
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:mariadb")
 }
 
 // Compile to Java 21 bytecode (virtual threads are stable since 21) so the app runs on any
