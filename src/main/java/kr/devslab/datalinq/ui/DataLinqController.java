@@ -21,8 +21,37 @@ import java.util.function.Consumer;
  */
 public final class DataLinqController {
 
-    /** What the centre panel shows. */
+    /** The active full screen. MAIN is the menu + output; others are dedicated editors. */
+    public enum Screen { MAIN, DB_CONNECTION }
+
+    /** What the centre panel shows on the MAIN screen. */
     public enum Center { OUTPUT, ABOUT, CONFIRM }
+
+    /**
+     * Port for reading / testing / persisting datasources, kept TUI- and DB-free so the
+     * controller stays unit-testable (prod: backed by AppConfig + DriverManager; test: a fake).
+     */
+    public interface DatasourceGateway {
+        List<String> names();
+
+        String url(String name);
+
+        String username(String name);
+
+        String password(String name);
+
+        String defaultSource();
+
+        String defaultTarget();
+
+        void save(String name, String url, String username, String password,
+                  boolean asDefaultSource, boolean asDefaultTarget) throws Exception;
+
+        void remove(String name) throws Exception;
+
+        /** Attempts a connection; returns {@code null} on success, otherwise an error message. */
+        String test(String url, String username, String password);
+    }
 
     /** A menu entry: a fixed base action, or a discovered migration. */
     public record Entry(Kind kind, String label, Operation operation) {
@@ -45,23 +74,30 @@ public final class DataLinqController {
     private final int maxParallel;
     private final OperationProvider provider;
     private final Runner runner;
+    private final DatasourceGateway datasources;
 
     private final List<Entry> entries = new ArrayList<>();
     private final List<String> output = Collections.synchronizedList(new ArrayList<>());
     private int selected;
     private boolean dryRun;
+    private Screen screen = Screen.MAIN;
     private Center center = Center.OUTPUT;
     private Entry pendingConfirm;
     private volatile boolean running;
     private boolean quitRequested;
 
+    // DB Connection screen state
+    private int dsIndex;
+    private volatile String dbStatus = "";
+
     public DataLinqController(Messages msg, boolean dryRunDefault, int maxParallel,
-                              OperationProvider provider, Runner runner) {
+                              OperationProvider provider, Runner runner, DatasourceGateway datasources) {
         this.msg = msg;
         this.dryRun = dryRunDefault;
         this.maxParallel = Math.max(1, maxParallel);
         this.provider = provider;
         this.runner = runner;
+        this.datasources = datasources;
     }
 
     public void init() {
@@ -90,8 +126,39 @@ public final class DataLinqController {
         return dryRun;
     }
 
+    public Screen screen() {
+        return screen;
+    }
+
     public Center center() {
         return center;
+    }
+
+    // ---- DB Connection queries ----
+
+    public List<String> datasourceNames() {
+        return datasources.names();
+    }
+
+    public int dsIndex() {
+        return dsIndex;
+    }
+
+    /** The currently selected datasource name, or null if there are none. */
+    public String selectedDatasource() {
+        List<String> names = datasources.names();
+        return (dsIndex >= 0 && dsIndex < names.size()) ? names.get(dsIndex) : null;
+    }
+
+    public String url(String name)      { return datasources.url(name); }
+    public String username(String name) { return datasources.username(name); }
+    public String password(String name) { return datasources.password(name); }
+    public boolean isDefaultSource(String name) { return name != null && name.equals(datasources.defaultSource()); }
+    public boolean isDefaultTarget(String name) { return name != null && name.equals(datasources.defaultTarget()); }
+
+    /** Status line for the DB Connection screen (test / save result); volatile - set off-thread. */
+    public String dbStatus() {
+        return dbStatus;
     }
 
     public Entry pendingConfirm() {
@@ -167,7 +234,8 @@ public final class DataLinqController {
         switch (e.kind()) {
             case ABOUT -> center = Center.ABOUT;
             case QUIT -> quitRequested = true;
-            case SETTINGS, DB_CONNECTION -> {
+            case DB_CONNECTION -> openDbConnection();
+            case SETTINGS -> {
                 center = Center.OUTPUT;
                 log("(" + e.label() + " - coming soon)");
             }
@@ -205,8 +273,72 @@ public final class DataLinqController {
     }
 
     public void back() {
+        if (screen != Screen.MAIN) {
+            closeDbConnection();
+            return;
+        }
         center = Center.OUTPUT;
         pendingConfirm = null;
+    }
+
+    // ---- DB Connection commands ----
+
+    public void openDbConnection() {
+        screen = Screen.DB_CONNECTION;
+        dsIndex = 0;
+        dbStatus = "";
+    }
+
+    public void closeDbConnection() {
+        screen = Screen.MAIN;
+        center = Center.OUTPUT;
+    }
+
+    public void setDsIndex(int index) {
+        int count = datasources.names().size();
+        if (count == 0) {
+            dsIndex = 0;
+        } else if (index < 0) {
+            dsIndex = 0;
+        } else if (index >= count) {
+            dsIndex = count - 1;
+        } else {
+            dsIndex = index;
+        }
+    }
+
+    public void moveDsUp() {
+        setDsIndex(dsIndex - 1);
+    }
+
+    public void moveDsDown() {
+        setDsIndex(dsIndex + 1);
+    }
+
+    /** Sets a transient "testing ..." status before an async {@link #testConnection}. */
+    public void markTesting(String name) {
+        dbStatus = msg.get("status.testing", name);
+    }
+
+    /** Tests a connection with the given (possibly edited) values; updates {@link #dbStatus()}. */
+    public void testConnection(String name, String url, String username, String password) {
+        String error = datasources.test(url, username, password);
+        dbStatus = (error == null)
+                ? msg.get("status.connectionOk", name)
+                : msg.get("status.connectionFail", name, error);
+        log(dbStatus);
+    }
+
+    /** Persists a datasource (optionally as default source/target); updates {@link #dbStatus()}. */
+    public void saveDatasource(String name, String url, String username, String password,
+                               boolean asDefaultSource, boolean asDefaultTarget) {
+        try {
+            datasources.save(name, url, username, password, asDefaultSource, asDefaultTarget);
+            dbStatus = msg.get("status.saved", name);
+        } catch (Exception e) {
+            dbStatus = msg.get("status.saveFailed", name, e.getMessage());
+        }
+        log(dbStatus);
     }
 
     /** Runs one migration. Synchronous; the View may call it on a virtual thread. */

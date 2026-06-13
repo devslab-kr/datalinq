@@ -5,6 +5,7 @@
 package kr.devslab.datalinq;
 
 import kr.devslab.datalinq.config.AppConfig;
+import kr.devslab.datalinq.config.AppConfigDatasourceGateway;
 import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.core.OperationScanner;
 import kr.devslab.datalinq.engine.MigrationEngine;
@@ -225,7 +226,8 @@ public final class Main {
         DataLinqController controller = new DataLinqController(
                 msg, config.dryRunDefault(), config.maxParallel(),
                 scanner::scan,
-                engine::run);
+                engine::run,
+                new AppConfigDatasourceGateway(config));
         new DataLinqApp(controller, logo, aboutLines(msg)).run();
     }
 

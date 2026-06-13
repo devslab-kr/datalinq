@@ -12,7 +12,10 @@ import kr.devslab.datalinq.ui.DataLinqController.Entry;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,9 +36,66 @@ class DataLinqControllerTest {
     }
 
     private static DataLinqController controller(DataLinqController.Runner runner, Operation... ops) {
-        DataLinqController c = new DataLinqController(MSG, true, 4, () -> List.of(ops), runner);
+        return controller(new FakeGateway(), runner, ops);
+    }
+
+    private static DataLinqController controller(DataLinqController.DatasourceGateway gateway,
+                                                 DataLinqController.Runner runner, Operation... ops) {
+        DataLinqController c = new DataLinqController(MSG, true, 4, () -> List.of(ops), runner, gateway);
         c.init();
         return c;
+    }
+
+    /** In-memory datasource gateway - records save/test calls, no JDBC. */
+    private static final class FakeGateway implements DataLinqController.DatasourceGateway {
+        final Map<String, String[]> ds = new LinkedHashMap<>(); // name -> [url, user, pass]
+        String defaultSource = "";
+        String defaultTarget = "";
+        String testResult; // null = success
+        int saves;
+        int tests;
+
+        FakeGateway with(String name, String url, String user, String pass) {
+            ds.put(name, new String[]{url, user, pass});
+            return this;
+        }
+
+        @Override public List<String> names() {
+            return new ArrayList<>(ds.keySet());
+        }
+        @Override public String url(String name) {
+            return ds.containsKey(name) ? ds.get(name)[0] : "";
+        }
+        @Override public String username(String name) {
+            return ds.containsKey(name) ? ds.get(name)[1] : "";
+        }
+        @Override public String password(String name) {
+            return ds.containsKey(name) ? ds.get(name)[2] : "";
+        }
+        @Override public String defaultSource() {
+            return defaultSource;
+        }
+        @Override public String defaultTarget() {
+            return defaultTarget;
+        }
+        @Override public void save(String name, String url, String user, String pass,
+                                   boolean asDefaultSource, boolean asDefaultTarget) {
+            ds.put(name, new String[]{url, user, pass});
+            if (asDefaultSource) {
+                defaultSource = name;
+            }
+            if (asDefaultTarget) {
+                defaultTarget = name;
+            }
+            saves++;
+        }
+        @Override public void remove(String name) {
+            ds.remove(name);
+        }
+        @Override public String test(String url, String user, String pass) {
+            tests++;
+            return testResult;
+        }
     }
 
     @Test
@@ -129,5 +189,59 @@ class DataLinqControllerTest {
         c.runAllMigrations();
         assertEquals(3, runs.get());
         assertFalse(c.running());
+    }
+
+    // ---- DB Connection ----
+
+    @Test
+    void activatingDbConnectionEntryOpensThatScreen() {
+        DataLinqController c = controller((op, dry, log) -> 0);
+        assertEquals(DataLinqController.Screen.MAIN, c.screen());
+        c.setSelected(1); // DB Connection
+        c.activate();
+        assertEquals(DataLinqController.Screen.DB_CONNECTION, c.screen());
+        c.back();
+        assertEquals(DataLinqController.Screen.MAIN, c.screen());
+    }
+
+    @Test
+    void datasourceSelectionClampsToBounds() {
+        FakeGateway gw = new FakeGateway().with("a", "u1", "", "").with("b", "u2", "", "");
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+        c.openDbConnection();
+        assertEquals(0, c.dsIndex());
+        c.moveDsUp();
+        assertEquals(0, c.dsIndex()); // clamped at 0
+        c.moveDsDown();
+        c.moveDsDown(); // only 2 datasources
+        assertEquals(1, c.dsIndex()); // clamped at last
+        assertEquals("b", c.selectedDatasource());
+    }
+
+    @Test
+    void testConnectionSetsOkOrFailStatus() {
+        FakeGateway gw = new FakeGateway().with("a", "jdbc:x", "u", "p");
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+
+        gw.testResult = null; // success
+        c.testConnection("a", "jdbc:x", "u", "p");
+        assertEquals(1, gw.tests);
+        assertTrue(c.dbStatus().contains("a"));
+
+        gw.testResult = "connection refused";
+        c.testConnection("a", "jdbc:x", "u", "p");
+        assertEquals(2, gw.tests);
+        assertTrue(c.dbStatus().contains("connection refused"));
+    }
+
+    @Test
+    void saveDatasourcePersistsThroughGateway() {
+        FakeGateway gw = new FakeGateway().with("a", "old", "u", "p");
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+        c.saveDatasource("a", "jdbc:new", "root", "secret", true, false);
+        assertEquals(1, gw.saves);
+        assertEquals("jdbc:new", gw.url("a"));
+        assertEquals("a", gw.defaultSource());
+        assertTrue(c.dbStatus().contains("a"));
     }
 }
