@@ -43,13 +43,19 @@ import java.util.Locale;
 public final class Main {
 
     public static void main(String[] args) throws Exception {
-        Drivers.loadExternal(); // register any user-provided / downloaded JDBC drivers
+        String cmd = args.length > 0 ? args[0] : "tui";
+        // Only the commands that actually open JDBC connections need the external drivers loaded.
+        // Loading them opens a URLClassLoader over the jars, which on Windows keeps those files
+        // locked for the JVM's lifetime - so doing it unconditionally would block `driver <name>`
+        // from refreshing an already-downloaded driver. Keep startup lock-free for other commands.
+        if (cmd.equals("tui") || cmd.equals("run")) {
+            Drivers.loadExternal(); // register any user-provided / downloaded JDBC drivers
+        }
         Home home = Home.detect();
         AppConfig config = loadConfig(home);
         Path sqlRoot = resolveSqlRoot(home, config);
 
         List<Operation> ops = new OperationScanner(sqlRoot).scan();
-        String cmd = args.length > 0 ? args[0] : "tui";
 
         switch (cmd) {
             case "tui" -> launchTui(home, config);

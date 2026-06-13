@@ -21,6 +21,7 @@ import dev.tamboui.tui.bindings.Actions;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.MouseEvent;
+import dev.tamboui.widgets.common.ScrollBarPolicy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +76,7 @@ public final class DataLinqApp extends ToolkitApp {
                 .highlightSymbol("> ")
                 .highlightColor(Color.YELLOW)
                 .autoScroll()
-                .scrollbar();
+                .scrollbar(ScrollBarPolicy.AS_NEEDED);
     }
 
     @Override
@@ -122,7 +123,7 @@ public final class DataLinqApp extends ToolkitApp {
                         .onMouseEvent(this::onMouse),
                         Constraint.percentage(40))
                 .center(panel(outputContent())
-                        .title("output")
+                        .title(c.msg().get("panel.output"))
                         .rounded()
                         .borderColor(Color.DARK_GRAY))
                 .bottom(panel(text(" " + c.msg().get("footer.keys", shortcutRange()) + " ").dim())
@@ -351,8 +352,8 @@ public final class DataLinqApp extends ToolkitApp {
             }
             Element nameList = column(dsLines.toArray(new Element[0])).spacing(1);
             Element defaults = column(
-                    text(c.msg().get("db.defaultSource") + ": " + orDash(c.defaultSourceName())).cyan(),
-                    text(c.msg().get("db.defaultTarget") + ": " + orDash(c.defaultTargetName())).cyan());
+                    text("  " + c.msg().get("db.defaultSource") + ": " + orDash(c.defaultSourceName())).cyan(),
+                    text("  " + c.msg().get("db.defaultTarget") + ": " + orDash(c.defaultTargetName())).cyan());
             Element dsPanel = panel(column(nameList, text(""), defaults))
                     .title(c.msg().get("menu.dbConnection")).rounded()
                     .borderColor(dbFieldsPane ? Color.DARK_GRAY : Color.CYAN);
@@ -367,7 +368,10 @@ public final class DataLinqApp extends ToolkitApp {
                 formRows.add(slotRow(slots.get(i), labelWidth, dbFieldsPane && dbField == i));
             }
             if (JdbcUrls.isStructured(dbType)) {
-                formRows.add(text("URL: " + JdbcUrls.build(dbType, dbHost, dbPort, dbDatabase)).dim());
+                // End-ellipsis: the meaningful part (host/port/db) is at the start; the tail is
+                // boilerplate (encrypt/trust flags), so a clean "…" beats a hard cut at the border.
+                formRows.add(text("URL  " + JdbcUrls.build(dbType, dbHost, dbPort, dbDatabase))
+                        .ellipsis().dim());
             }
             formRows.add(text(c.dbStatus()).yellow());
             Element form = panel(column(formRows.toArray(new Element[0])).spacing(1))

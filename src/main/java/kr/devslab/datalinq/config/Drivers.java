@@ -6,6 +6,7 @@ package kr.devslab.datalinq.config;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -116,12 +117,31 @@ public final class Drivers {
         if (coord == null) {
             throw new IOException("unknown driver '" + name + "' - known: " + CATALOG.keySet());
         }
+        String spec = MAVEN_CENTRAL + coord.path();
+        URL url = URI.create(spec).toURL();
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(15_000);
+        conn.setReadTimeout(30_000);
+        conn.setInstanceFollowRedirects(true);
+        conn.setRequestProperty("User-Agent", "datalinq");
+        int code = conn.getResponseCode();
+        if (code != HttpURLConnection.HTTP_OK) {
+            conn.disconnect();
+            throw new IOException("could not download '" + name + "' (HTTP " + code + "): " + spec
+                    + (code == HttpURLConnection.HTTP_NOT_FOUND
+                            ? " - this version is not on Maven Central; the catalog coordinate may be wrong"
+                            : ""));
+        }
         Files.createDirectories(driversDir());
         Path target = driversDir().resolve(coord.jarName());
-        URL url = URI.create(MAVEN_CENTRAL + coord.path()).toURL();
-        try (InputStream in = url.openStream()) {
-            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        Path part = driversDir().resolve(coord.jarName() + ".part");
+        try (InputStream in = conn.getInputStream()) {
+            Files.copy(in, part, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            conn.disconnect();
         }
+        // Move into place only after a complete download, so a failure never leaves a truncated jar.
+        Files.move(part, target, StandardCopyOption.REPLACE_EXISTING);
         return target;
     }
 }
