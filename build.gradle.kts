@@ -50,8 +50,14 @@ tasks.test {
 
 application {
     mainClass = "kr.devslab.datalinq.Main"
-    // Korean content + Windows console: force UTF-8 stdout/stderr
-    applicationDefaultJvmArgs = listOf("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+    // Korean content + Windows console: force UTF-8 stdout/stderr.
+    // --enable-native-access: JLine uses native terminal access (silences the Java 25
+    // restricted-method warning and stays working when it becomes enforced).
+    applicationDefaultJvmArgs = listOf(
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8",
+        "--enable-native-access=ALL-UNNAMED",
+    )
 }
 
 // The TUI reads from the real terminal; let `gradle run` pass stdin through.
