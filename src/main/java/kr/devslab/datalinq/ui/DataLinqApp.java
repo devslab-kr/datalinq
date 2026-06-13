@@ -456,16 +456,19 @@ public final class DataLinqApp extends ToolkitApp {
             w = Math.max(w, TextWidth.of(l));
         }
         String sqlDir = c.setSqlDir().isEmpty() ? c.msg().get("field.sqlDirDefault") : c.setSqlDir();
+        // One blank line between the toggle group and the value group - lighter than a gap on
+        // every row, but enough to keep the rows from looking cramped.
         return panel(column(
                 settingRow(labels[0], w, languageLabel(c.setLanguage()), false, active == 0),
                 settingRow(labels[1], w, boolLabel(c.setDryRun()), false, active == 1),
                 settingRow(labels[2], w, boolLabel(c.setMask()), false, active == 2),
+                text(""),
                 settingRow(labels[3], w, c.setBatchSize(), true, active == 3),
                 settingRow(labels[4], w, c.setMaxParallel(), true, active == 4),
                 settingRow(labels[5], w, sqlDir, false, active == 5),
+                text(""),
                 text(c.msg().get("settings.restartNote")).dim(),
-                text(c.settingsStatus()).yellow())
-                .spacing(1))
+                text(c.settingsStatus()).yellow()))
                 .title(c.msg().get("settings.title"))
                 .rounded()
                 .borderColor(Color.CYAN);
