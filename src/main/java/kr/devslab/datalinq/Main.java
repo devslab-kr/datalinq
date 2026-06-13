@@ -14,6 +14,8 @@ import kr.devslab.datalinq.ui.DataLinqController;
 import kr.devslab.datalinq.ui.Logo;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,7 +27,10 @@ import java.util.Locale;
  * engine + config runnable/testable on their own.)
  *
  * <pre>
- *   (no args) | list            list discovered operations
+ *   (no args) | tui             launch the TUI
+ *   init                        write the bundled defaults (i18n/, branding/, example
+ *                               config, sql/ skeleton) into the current folder for editing
+ *   list                        list discovered operations
  *   config                      show resolved application.yml (passwords masked)
  *   i18n [lang]                 inspect translated UI strings
  *   logo                        print the header logo
@@ -44,6 +49,7 @@ public final class Main {
 
         switch (cmd) {
             case "tui" -> launchTui(home, config, sqlRoot);
+            case "init" -> initScaffold();
             case "list" -> printList(sqlRoot, ops);
             case "config" -> printConfig(config, sqlRoot);
             case "i18n" -> printI18n(home, config, args);
@@ -55,6 +61,83 @@ public final class Main {
             }
         }
     }
+
+    /**
+     * Writes the defaults baked into the jar out to the current folder so they can be edited:
+     * {@code i18n/}, {@code branding/logo.txt}, {@code application.example.yml}, and an empty
+     * {@code sql/} with a README describing the folder convention. Existing files are kept, so it
+     * is safe to re-run. (You do not need this just to run - the jar already carries the defaults;
+     * {@code init} only materialises them when you want to customise.)
+     */
+    private static void initScaffold() throws IOException {
+        Path cwd = Paths.get(System.getProperty("user.dir"));
+        System.out.println("Scaffolding DataLinq defaults into " + cwd);
+        int written = 0;
+        written += extract("/i18n/messages_en.properties", cwd, "i18n/messages_en.properties");
+        written += extract("/i18n/messages_ko.properties", cwd, "i18n/messages_ko.properties");
+        written += extract("/branding/logo.txt", cwd, "branding/logo.txt");
+        written += extract("/application.example.yml", cwd, "application.example.yml");
+        Path sqlDir = cwd.resolve("sql");
+        if (Files.exists(sqlDir.resolve("README.txt"))) {
+            System.out.println("  skip     sql/README.txt (exists)");
+        } else {
+            Files.createDirectories(sqlDir);
+            Files.writeString(sqlDir.resolve("README.txt"), SQL_README, StandardCharsets.UTF_8);
+            System.out.println("  created  sql/README.txt");
+            written++;
+        }
+        System.out.println();
+        if (written == 0) {
+            System.out.println("Everything already exists - nothing changed.");
+        } else {
+            System.out.println("Done (" + written + " file(s)). Copy application.example.yml to "
+                    + "application.yml and fill in your DBs, drop migration folders under sql/, then: datalinq");
+        }
+    }
+
+    private static int extract(String resource, Path baseDir, String relative) throws IOException {
+        Path target = baseDir.resolve(relative);
+        if (Files.exists(target)) {
+            System.out.println("  skip     " + relative + " (exists)");
+            return 0;
+        }
+        try (InputStream in = Main.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                System.out.println("  missing  " + relative + " (no bundled default)");
+                return 0;
+            }
+            if (target.getParent() != null) {
+                Files.createDirectories(target.getParent());
+            }
+            Files.copy(in, target);
+        }
+        System.out.println("  created  " + relative);
+        return 1;
+    }
+
+    private static final String SQL_README = """
+            DataLinq migration folders
+            ==========================
+            Each subfolder here becomes a menu item. Name them NN_Title (the number sets the
+            run order, the rest becomes the label): e.g. 01_Customers, 02_Orders.
+
+            sql/NN_Title/
+              *.sql                  the statements, run in filename order
+              operation.properties   optional metadata (UTF-8); all keys optional:
+
+                description=...       shown in the UI
+                source=legacy-erp     source datasource name   (default: defaults.source)
+                target=new-core       target datasource name   (default: defaults.target)
+                table=customers       target table for simple row-by-row ETL inserts
+                handler=...           a MigrationHandler name() for complex transforms
+                type=SCRIPT|ETL|HANDLER   usually inferred; set to be explicit
+                destructive=true      ask for confirmation before running in execute mode
+                confirm=This wipes X. custom confirmation text
+
+            Type is inferred when not set: a handler= means HANDLER; otherwise a source.sql file
+            means ETL (migrate rows); otherwise SCRIPT (run the .sql files against the target).
+            Datasource names refer to entries in application.yml.
+            """;
 
     /**
      * Config precedence: an existing external {@code application.yml} (edits saved back to it),
