@@ -121,24 +121,38 @@ options:
 - `destructive=true` 작업은 실행 전 명시적 확인을 요구합니다.
 - 각 작업은 **하나의 타겟 트랜잭션** 안에서 실행: 성공 시 커밋, 오류 시 롤백.
 
-## 실행
+## 설치 & 실행
 
-기본 명령은 **TUI** 이고, 모든 기능은 CLI로도 스크립트화할 수 있습니다.
+기본 명령은 **TUI** 이고, 모든 하위 명령은 스크립트화할 수 있습니다.
+
+### jbang으로 (권장)
+
+[jbang](https://www.jbang.dev/) 은 DataLinq를 실제 `datalinq` 명령으로 설치해 주고, JDK가 없으면
+알맞은 JDK까지 받아 줍니다:
 
 ```bash
-./gradlew shadowJar                             # 자기완결형 jar 빌드
-java -jar build/libs/datalinq.jar               # TUI 메뉴 (마이그레이션 / DB 연결 / 설정 / 정보)
-
-# 또는 CLI로:
-java -jar build/libs/datalinq.jar init          # 편집용 기본값 생성 (i18n/, branding/, 예시 설정, sql/)
-java -jar build/libs/datalinq.jar list          # 발견된 작업 목록
-java -jar build/libs/datalinq.jar config        # 해석된 설정 표시(비밀번호 마스킹)
-java -jar build/libs/datalinq.jar run 0         # 0번 작업 dry-run
-java -jar build/libs/datalinq.jar run 0 --execute   # 실제 쓰기
+jbang app install datalinq@devslab-kr/datalinq   # 한 번만 - `datalinq` 명령 생성
+datalinq                                          # TUI 실행 (마이그레이션 / DB 연결 / 설정 / 정보)
+datalinq init                                     # 편집용 기본값 생성 (i18n/, branding/, 예시 설정, sql/)
+datalinq list                                     # 발견된 작업 목록
+datalinq run 0                                    # 0번 작업 dry-run
+datalinq run 0 --execute                          # 실제 쓰기
 ```
 
-jar는 단일 드롭형 산출물입니다(Shadow fat-jar, `jbang-catalog.json` 에 [jbang](https://www.jbang.dev/)
-별칭 포함). 개발 중에는 `./gradlew run --args="..."` 도 동작합니다.
+설치 없이 한 번만 실행하려면: `jbang datalinq@devslab-kr/datalinq`.
+
+### jar로 (jbang 없이)
+
+[최신 릴리스](https://github.com/devslab-kr/datalinq/releases/latest)에서 `datalinq.jar` 를 받아
+직접 실행합니다(**JDK 21+** 필요). `java -jar datalinq.jar <명령>` 은 `datalinq <명령>` 과 동일합니다:
+
+```bash
+java -jar datalinq.jar              # TUI
+java -jar datalinq.jar config       # 해석된 설정 표시(비밀번호 마스킹)
+java -jar datalinq.jar run 0 --execute
+```
+
+개발 중에는 `./gradlew run --args="..."` 도 동작하며, `./gradlew shadowJar` 로 jar을 빌드합니다.
 
 ## 상태
 
