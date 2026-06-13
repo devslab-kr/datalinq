@@ -6,6 +6,7 @@ package kr.devslab.datalinq;
 
 import kr.devslab.datalinq.config.AppConfig;
 import kr.devslab.datalinq.config.AppConfigDatasourceGateway;
+import kr.devslab.datalinq.config.Drivers;
 import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.core.OperationScanner;
 import kr.devslab.datalinq.engine.MigrationEngine;
@@ -35,12 +36,14 @@ import java.util.Locale;
  *   config                      show resolved application.yml (passwords masked)
  *   i18n [lang]                 inspect translated UI strings
  *   logo                        print the header logo
+ *   driver [name]               list / download extra JDBC drivers (into ~/.datalinq/drivers)
  *   run &lt;index&gt; [--execute]     run one (default = dry-run; --execute actually writes)
  * </pre>
  */
 public final class Main {
 
     public static void main(String[] args) throws Exception {
+        Drivers.loadExternal(); // register any user-provided / downloaded JDBC drivers
         Home home = Home.detect();
         AppConfig config = loadConfig(home);
         Path sqlRoot = resolveSqlRoot(home, config);
@@ -55,6 +58,7 @@ public final class Main {
             case "config" -> printConfig(config, sqlRoot);
             case "i18n" -> printI18n(home, config, args);
             case "logo" -> Logo.load(home.resolve("branding/logo.txt")).forEach(System.out::println);
+            case "driver" -> manageDriver(args);
             case "run" -> runOne(ops, config, args);
             default -> {
                 System.err.println("unknown command: " + cmd);
@@ -160,6 +164,23 @@ public final class Main {
     private static Path resolveSqlRoot(Home home, AppConfig config) {
         String dir = config.sqlDir();
         return dir.isBlank() ? home.resolve("sql") : Paths.get(dir);
+    }
+
+    /**
+     * {@code driver} lists the downloadable JDBC drivers; {@code driver <name>} fetches one from
+     * Maven Central into {@code ~/.datalinq/drivers/} (loaded on the next launch).
+     */
+    private static void manageDriver(String[] args) throws IOException {
+        if (args.length < 2) {
+            System.out.println("drivers dir: " + Drivers.driversDir());
+            System.out.println("downloadable: " + Drivers.CATALOG.keySet());
+            System.out.println("usage: driver <name>   (also: drop any driver .jar in the dir)");
+            return;
+        }
+        System.out.println("downloading " + args[1] + " ...");
+        Path jar = Drivers.download(args[1]);
+        System.out.println("saved:  " + jar);
+        System.out.println("(takes effect on the next launch; use it with the Custom type + a JDBC URL)");
     }
 
     private static void printList(Path sqlRoot, List<Operation> ops) {

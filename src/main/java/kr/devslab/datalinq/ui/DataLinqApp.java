@@ -522,6 +522,7 @@ public final class DataLinqApp extends ToolkitApp {
         return switch (type) {
             case JdbcUrls.SQLSERVER -> "MS SQL Server";
             case JdbcUrls.MARIADB -> "MariaDB / MySQL";
+            case JdbcUrls.POSTGRESQL -> "PostgreSQL";
             default -> "Custom (URL)";
         };
     }

@@ -25,9 +25,15 @@ class JdbcUrlsTest {
     }
 
     @Test
+    void buildsPostgresqlWithDefaultPort() {
+        assertEquals("jdbc:postgresql://h:5432/db", JdbcUrls.build("postgresql", "h", "", "db"));
+        assertTrue(JdbcUrls.isStructured("postgresql"));
+    }
+
+    @Test
     void customAndUnknownTypesBuildNothing() {
         assertEquals("", JdbcUrls.build("custom", "h", "1", "db"));
-        assertEquals("", JdbcUrls.build("postgresql", "h", "1", "db"));
+        assertEquals("", JdbcUrls.build("oracle", "h", "1", "db")); // not a bundled/structured type
     }
 
     @Test

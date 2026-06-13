@@ -16,10 +16,11 @@ public final class JdbcUrls {
 
     public static final String SQLSERVER = "sqlserver";
     public static final String MARIADB = "mariadb";
+    public static final String POSTGRESQL = "postgresql";
     public static final String CUSTOM = "custom";
 
     /** Selectable types in display order (custom last). */
-    public static final List<String> TYPES = List.of(SQLSERVER, MARIADB, CUSTOM);
+    public static final List<String> TYPES = List.of(SQLSERVER, MARIADB, POSTGRESQL, CUSTOM);
 
     private JdbcUrls() {
     }
@@ -29,13 +30,14 @@ public final class JdbcUrls {
         return switch (type == null ? "" : type) {
             case SQLSERVER -> "1433";
             case MARIADB -> "3306";
+            case POSTGRESQL -> "5432";
             default -> "";
         };
     }
 
     /** True if the type uses structured host/port/database fields (false for custom). */
     public static boolean isStructured(String type) {
-        return SQLSERVER.equals(type) || MARIADB.equals(type);
+        return SQLSERVER.equals(type) || MARIADB.equals(type) || POSTGRESQL.equals(type);
     }
 
     /**
@@ -50,6 +52,7 @@ public final class JdbcUrls {
             case SQLSERVER -> "jdbc:sqlserver://" + h + ":" + p
                     + ";databaseName=" + db + ";encrypt=false;trustServerCertificate=true";
             case MARIADB -> "jdbc:mariadb://" + h + ":" + p + "/" + db;
+            case POSTGRESQL -> "jdbc:postgresql://" + h + ":" + p + "/" + db;
             default -> "";
         };
     }

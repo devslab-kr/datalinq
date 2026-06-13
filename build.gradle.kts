@@ -23,9 +23,11 @@ dependencies {
     // application.yml config (loaded as a Map -> native-image friendly)
     implementation("org.yaml:snakeyaml:2.3")
 
-    // JDBC drivers: source = MS SQL Server, target = MariaDB
+    // Bundled JDBC drivers (structured types). The MariaDB driver also connects to MySQL servers.
+    // Other databases work via the Custom type + a driver dropped in / downloaded to the drivers dir.
     implementation("com.microsoft.sqlserver:mssql-jdbc:12.8.1.jre11")
     implementation("org.mariadb.jdbc:mariadb-java-client:3.5.2")
+    implementation("org.postgresql:postgresql:42.7.4")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
