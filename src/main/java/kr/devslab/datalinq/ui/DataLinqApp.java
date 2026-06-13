@@ -90,7 +90,7 @@ public final class DataLinqApp extends ToolkitApp {
                         .title("output")
                         .rounded()
                         .borderColor(Color.DARK_GRAY))
-                .bottom(panel(text(" " + c.msg().get("footer.keys") + " ").dim())
+                .bottom(panel(text(" " + c.msg().get("footer.keys", shortcutRange()) + " ").dim())
                         .rounded()
                         .borderColor(Color.DARK_GRAY));
 
@@ -156,6 +156,12 @@ public final class DataLinqApp extends ToolkitApp {
             lines.add(text(c.msg().get("app.subtitle")).dim());
         }
         return column(lines.toArray(new Element[0]));
+    }
+
+    /** The digit-shortcut range actually shown, e.g. "1-8" (or "1") - bounded by 9 key bindings. */
+    private String shortcutRange() {
+        int n = Math.min(9, c.entries().size());
+        return n <= 1 ? "1" : "1-" + n;
     }
 
     private String menuLabel(int index, Entry e) {
