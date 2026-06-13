@@ -303,7 +303,7 @@ public final class DataLinqApp extends ToolkitApp {
                 var line = text((here ? "> " : "  ") + n + marks);
                 dsLines.add(here ? line.yellow().bold() : line.white());
             }
-            Element dsPanel = panel(column(dsLines.toArray(new Element[0])))
+            Element dsPanel = panel(column(dsLines.toArray(new Element[0])).spacing(1))
                     .title(c.msg().get("menu.dbConnection")).rounded()
                     .borderColor(dbFieldsPane ? Color.DARK_GRAY : Color.CYAN);
 
@@ -313,8 +313,8 @@ public final class DataLinqApp extends ToolkitApp {
                     fieldRow(labels[0], labelWidth, dbBuf[0], dbFieldsPane && dbField == 0, false),
                     fieldRow(labels[1], labelWidth, dbBuf[1], dbFieldsPane && dbField == 1, false),
                     fieldRow(labels[2], labelWidth, dbBuf[2], dbFieldsPane && dbField == 2, c.maskPassword()),
-                    text(""),
-                    text(c.dbStatus()).yellow()))
+                    text(c.dbStatus()).yellow())
+                    .spacing(1))
                     .title(c.selectedDatasource()).rounded()
                     .borderColor(dbFieldsPane ? Color.CYAN : Color.DARK_GRAY);
 
