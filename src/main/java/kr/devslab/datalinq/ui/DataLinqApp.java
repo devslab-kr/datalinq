@@ -213,6 +213,10 @@ public final class DataLinqApp extends ToolkitApp {
                 return EventResult.HANDLED;
             case OUTPUT:
             default:
+                if (e.matches(Actions.CANCEL)) { // Esc on the main screen quits cleanly
+                    quit();                       // (consume it so the router does not clear focus
+                    return EventResult.HANDLED;   //  and trigger a render error on the redraw)
+                }
                 if (e.matches(Actions.SELECT)) {
                     c.setSelected(menu.selected());
                     activateAndMaybeQuit(menu.selected());

@@ -17,6 +17,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static java.util.Comparator.comparing;
+import static java.util.Comparator.comparingInt;
+
 /**
  * Scans an {@code sql/} root and turns each subfolder into an {@link Operation}.
  * <p>
@@ -45,7 +48,7 @@ public final class OperationScanner {
         try (Stream<Path> dirs = Files.list(root)) {
             return dirs.filter(Files::isDirectory)
                     .map(this::toOperation)
-                    .sorted(Comparator.comparingInt(Operation::order).thenComparing(Operation::id))
+                    .sorted(comparingInt(Operation::order).thenComparing(Operation::id))
                     .toList();
         }
     }
@@ -98,7 +101,7 @@ public final class OperationScanner {
     private List<Path> listSql(Path dir) {
         try (Stream<Path> s = Files.list(dir)) {
             return s.filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".sql"))
-                    .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                    .sorted(comparing(p -> p.getFileName().toString()))
                     .toList();
         } catch (IOException e) {
             return List.of();
