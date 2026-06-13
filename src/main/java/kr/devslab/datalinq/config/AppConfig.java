@@ -87,6 +87,12 @@ public final class AppConfig {
         return !(v instanceof Boolean b) || b; // default true
     }
 
+    /** UI language code (e.g. "ko"); blank = system default. */
+    public String language() {
+        Object v = path("options", "language");
+        return v == null ? "" : v.toString().trim();
+    }
+
     // ---- connections ----
 
     public Connection openSource() throws SQLException {

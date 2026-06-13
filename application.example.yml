@@ -14,3 +14,4 @@ datasource:
 options:
   batch-size: 1000
   dry-run-default: true
+  language: en        # en | ko  (blank = system locale; add i18n/messages_<lang>.properties for more)

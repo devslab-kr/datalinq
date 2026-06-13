@@ -6,6 +6,7 @@
 package kr.devslab.datalinq;
 
 import kr.devslab.datalinq.config.AppConfig;
+import kr.devslab.datalinq.i18n.Messages;
 import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.core.OperationScanner;
 import kr.devslab.datalinq.engine.MigrationEngine;
@@ -37,6 +38,7 @@ public final class Main {
         switch (cmd) {
             case "list" -> printList(sqlRoot, ops);
             case "config" -> printConfig(configFile);
+            case "i18n" -> printI18n(projectDir, configFile, args);
             case "run" -> runOne(ops, configFile, args);
             default -> {
                 System.err.println("unknown command: " + cmd);
@@ -71,6 +73,17 @@ public final class Main {
                 + "  user=" + cfg.targetUsername() + "  pass=" + mask(cfg.targetPassword()));
         System.out.println("  options: batch-size=" + cfg.batchSize()
                 + "  dry-run-default=" + cfg.dryRunDefault());
+    }
+
+    private static void printI18n(Path projectDir, Path configFile, String[] args) throws Exception {
+        String lang = args.length > 1 ? args[1] : AppConfig.load(configFile).language();
+        Messages m = Messages.load(projectDir.resolve("i18n"), lang);
+        System.out.println("language: " + (lang.isBlank()
+                ? "(system: " + java.util.Locale.getDefault().getLanguage() + ")" : lang));
+        for (String k : new String[]{"menu.settings", "menu.dbConnection", "menu.about",
+                "action.test", "confirm.destructiveDefault", "footer.keys"}) {
+            System.out.println("  " + k + " = " + m.get(k));
+        }
     }
 
     private static void runOne(List<Operation> ops, Path configFile, String[] args) throws Exception {
