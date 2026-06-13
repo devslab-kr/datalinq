@@ -31,12 +31,13 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// Java 25 (best virtual-thread + JDBC behaviour; no synchronized pinning).
-// A toolchain so `./gradlew run` works no matter which JDK launches Gradle - Gradle
-// locates a JDK 25 (auto-detected, e.g. from ~/.jdks) for compiling and running.
+// Compile to Java 21 bytecode (virtual threads are stable since 21) so the app runs on any
+// JDK 21+ without juggling JAVA_HOME. Running it on JDK 24+/25 additionally avoids
+// virtual-thread pinning in JDBC drivers (JEP 491) - recommended for best throughput, but
+// not required.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
