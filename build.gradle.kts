@@ -46,12 +46,11 @@ tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
 
-// Bake the editable defaults INTO the jar (classpath) so a bare dropped jar runs with the
-// right logo + translations and zero setup. External files (next to the jar, or in the CWD)
-// still override these - see Home / the loaders. The repo-root copies stay the single source.
+// The default i18n/ and branding/ resources live in src/main/resources and are bundled into the
+// jar automatically. application.example.yml stays at the project root as a user-facing config
+// template (.env.example style), so copy that one into the jar for the first-run seed + init.
+// External files (next to the jar, or in the CWD) still override these - see Home / the loaders.
 tasks.processResources {
-    from("i18n") { into("i18n") }
-    from("branding") { into("branding") }
     from("application.example.yml")
 }
 
