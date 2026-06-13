@@ -41,7 +41,7 @@ class DataLinqControllerTest {
 
     private static DataLinqController controller(DataLinqController.DatasourceGateway gateway,
                                                  DataLinqController.Runner runner, Operation... ops) {
-        DataLinqController c = new DataLinqController(MSG, true, 4, () -> List.of(ops), runner, gateway);
+        DataLinqController c = new DataLinqController(MSG, true, 4, () -> List.of(ops), runner, gateway, true);
         c.init();
         return c;
     }
@@ -232,6 +232,14 @@ class DataLinqControllerTest {
         c.testConnection("a", "jdbc:x", "u", "p");
         assertEquals(2, gw.tests);
         assertTrue(c.dbStatus().contains("connection refused"));
+    }
+
+    @Test
+    void maskPasswordIsTogglableState() {
+        DataLinqController c = controller((op, dry, log) -> 0);
+        assertTrue(c.maskPassword()); // seeded true by the test helper
+        c.setMaskPassword(false);
+        assertFalse(c.maskPassword());
     }
 
     @Test

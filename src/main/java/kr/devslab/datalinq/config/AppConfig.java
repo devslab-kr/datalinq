@@ -149,6 +149,12 @@ public final class AppConfig {
         return !(v instanceof Boolean b) || b; // default true
     }
 
+    /** Whether the DB Connection screen masks password values ({@code options.mask-password}). */
+    public boolean maskPassword() {
+        Object v = path("options", "mask-password");
+        return !(v instanceof Boolean b) || b; // default true
+    }
+
     public String language() {
         Object v = path("options", "language");
         return v == null ? "" : v.toString().trim();

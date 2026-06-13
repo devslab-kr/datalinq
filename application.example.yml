@@ -21,4 +21,5 @@ options:
   dry-run-default: true
   language: en                # en | ko  (blank = system locale)
   max-parallel: 4             # max operations run concurrently (virtual threads; bounds DB connections)
+  mask-password: true         # DB Connection screen: mask password values (false = show in plain)
   # sql-dir: /path/to/sql     # external migration folder (blank = ./sql)

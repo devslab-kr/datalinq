@@ -227,7 +227,8 @@ public final class Main {
                 msg, config.dryRunDefault(), config.maxParallel(),
                 scanner::scan,
                 engine::run,
-                new AppConfigDatasourceGateway(config));
+                new AppConfigDatasourceGateway(config),
+                config.maskPassword());
         new DataLinqApp(controller, logo, aboutLines(msg)).run();
     }
 

@@ -89,15 +89,18 @@ public final class DataLinqController {
     // DB Connection screen state
     private int dsIndex;
     private volatile String dbStatus = "";
+    private boolean maskPassword;
 
     public DataLinqController(Messages msg, boolean dryRunDefault, int maxParallel,
-                              OperationProvider provider, Runner runner, DatasourceGateway datasources) {
+                              OperationProvider provider, Runner runner, DatasourceGateway datasources,
+                              boolean maskPassword) {
         this.msg = msg;
         this.dryRun = dryRunDefault;
         this.maxParallel = Math.max(1, maxParallel);
         this.provider = provider;
         this.runner = runner;
         this.datasources = datasources;
+        this.maskPassword = maskPassword;
     }
 
     public void init() {
@@ -159,6 +162,15 @@ public final class DataLinqController {
     /** Status line for the DB Connection screen (test / save result); volatile - set off-thread. */
     public String dbStatus() {
         return dbStatus;
+    }
+
+    /** Whether the DB Connection screen masks password values (a setting; editable in Settings). */
+    public boolean maskPassword() {
+        return maskPassword;
+    }
+
+    public void setMaskPassword(boolean mask) {
+        this.maskPassword = mask;
     }
 
     public Entry pendingConfirm() {

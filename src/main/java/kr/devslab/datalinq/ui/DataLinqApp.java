@@ -29,6 +29,7 @@ import static dev.tamboui.toolkit.Toolkit.dialog;
 import static dev.tamboui.toolkit.Toolkit.dock;
 import static dev.tamboui.toolkit.Toolkit.list;
 import static dev.tamboui.toolkit.Toolkit.panel;
+import static dev.tamboui.toolkit.Toolkit.row;
 import static dev.tamboui.toolkit.Toolkit.stack;
 import static dev.tamboui.toolkit.Toolkit.text;
 
@@ -39,6 +40,9 @@ import static dev.tamboui.toolkit.Toolkit.text;
  * destructive confirm render as centred dialog popups overlaid (via {@code stack}).
  */
 public final class DataLinqApp extends ToolkitApp {
+
+    /** Minimum underlined width of a DB field value, so empty fields still show an input line. */
+    private static final int FIELD_WIDTH = 24;
 
     private final DataLinqController c;
     private final List<String> logo;
@@ -299,9 +303,9 @@ public final class DataLinqApp extends ToolkitApp {
             String[] labels = {c.msg().get("field.url"), c.msg().get("field.user"), c.msg().get("field.password")};
             int labelWidth = Math.max(TextWidth.of(labels[0]), Math.max(TextWidth.of(labels[1]), TextWidth.of(labels[2])));
             Element form = panel(column(
-                    fieldRow(labels[0], labelWidth, dbBuf[0], dbFieldsPane && dbField == 0),
-                    fieldRow(labels[1], labelWidth, dbBuf[1], dbFieldsPane && dbField == 1),
-                    fieldRow(labels[2], labelWidth, dbBuf[2], dbFieldsPane && dbField == 2),
+                    fieldRow(labels[0], labelWidth, dbBuf[0], dbFieldsPane && dbField == 0, false),
+                    fieldRow(labels[1], labelWidth, dbBuf[1], dbFieldsPane && dbField == 1, false),
+                    fieldRow(labels[2], labelWidth, dbBuf[2], dbFieldsPane && dbField == 2, c.maskPassword()),
                     text(""),
                     text(c.dbStatus()).yellow()))
                     .title(c.selectedDatasource()).rounded()
@@ -321,10 +325,18 @@ public final class DataLinqApp extends ToolkitApp {
                 .onKeyEvent(this::onDbKey);
     }
 
-    private Element fieldRow(String label, int labelWidth, String value, boolean active) {
-        String s = (active ? "> " : "  ") + TextWidth.pad(label, labelWidth) + " : " + value + (active ? "█" : "");
-        var e = text(s);
-        return active ? e.yellow().bold() : e.white();
+    private Element fieldRow(String label, int labelWidth, String value, boolean active, boolean mask) {
+        var labelEl = text((active ? "> " : "  ") + TextWidth.pad(label, labelWidth) + " : ");
+        String shown = mask ? "•".repeat(value.length()) : value;
+        String region = shown + (active ? "█" : "");
+        // Pad the underlined span so even an empty value shows an input line.
+        while (TextWidth.of(region) < FIELD_WIDTH) {
+            region += " ";
+        }
+        var valueEl = text(region).underlined();
+        return active
+                ? row(labelEl.yellow().bold(), valueEl.yellow())
+                : row(labelEl.white(), valueEl.white());
     }
 
     private EventResult onDbKey(KeyEvent e) {
