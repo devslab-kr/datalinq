@@ -13,6 +13,146 @@ MariaDB/MySQL, PostgreSQL 드라이버는 **번들**되어 있고, 그 외(Oracl
 
 > **DevsLab Co., Ltd.** (주식회사 데브스랩) 제작 · https://devslab.kr · Apache-2.0
 
+## 빠른 시작
+
+아무것도 없는 상태에서 첫 마이그레이션까지 다섯 단계. 모든 블록은 복붙하면 됩니다.
+
+### 1. 설치
+
+```bash
+jbang app install datalinq@devslab-kr/datalinq   # `datalinq` 명령 생성 (jbang이 JDK도 준비해 줌)
+```
+
+> jbang이 없나요? [최신 릴리스](https://github.com/devslab-kr/datalinq/releases/latest)에서 `datalinq.jar` 를 받아, 이 가이드의 `datalinq` 자리에 `java -jar datalinq.jar` 를 쓰면 됩니다. **JDK 21+** 필요.
+
+### 2. 둘러보기 — DB 없이도 됨
+
+```bash
+datalinq init     # application.example.yml, i18n/, branding/, 샘플 sql/ 폴더를 여기에 생성
+datalinq list     # sql/ 아래에서 발견된 마이그레이션 목록
+datalinq          # TUI 실행 (방향키 / 숫자키로 이동, q 또는 Esc로 종료)
+```
+
+### 3. 데이터베이스 연결
+
+`init` 이 `application.example.yml` 을 만들어 줍니다. 복사해서 소스 하나, 타겟 하나를 채우세요:
+
+```bash
+cp application.example.yml application.yml
+```
+
+```yaml
+datasources:
+  my-source:
+    type: sqlserver          # sqlserver | mariadb | postgresql   (또는: type: custom + raw url:)
+    host: localhost
+    port: 1433
+    database: SourceDb
+    username: sa
+    password: "secret"
+  my-target:
+    type: postgresql
+    host: localhost
+    port: 5432
+    database: TargetDb
+    username: postgres
+    password: "secret"
+defaults:
+  source: my-source
+  target: my-target
+```
+
+```bash
+datalinq config   # 해석된 설정 확인 (비밀번호는 마스킹)
+```
+
+> 번들되지 않은 드라이버(Oracle, H2, SQLite, ...)가 필요하면 `datalinq driver oracle` 후 그 데이터소스를 `type: custom` + JDBC `url:` 로 설정하세요.
+
+### 4. 첫 마이그레이션 작성
+
+마이그레이션은 `sql/` 아래 폴더 하나입니다. 가장 단순한 **ETL** 은 소스 쿼리의 행을 타겟 테이블로 복사합니다. SELECT의 **컬럼 별칭이 곧 타겟 컬럼**이 되므로 INSERT문을 직접 쓰지 않습니다:
+
+```bash
+mkdir -p sql/01_Customers
+```
+
+`sql/01_Customers/source.sql`:
+
+```sql
+SELECT customer_id AS id,
+       full_name   AS name,
+       created_at  AS created
+FROM   customers
+```
+
+`sql/01_Customers/operation.properties`:
+
+```properties
+type=etl
+table=customers       # INSERT 대상 타겟 테이블
+```
+
+### 5. 실행 — 항상 dry-run 먼저
+
+```bash
+datalinq run 0             # DRY-RUN: 소스를 읽지만 아무것도 쓰지 않음 (타겟 트랜잭션 롤백)
+datalinq run 0 --execute   # 실제 실행: 단일 트랜잭션, 성공 시 커밋 / 오류 시 롤백
+```
+
+또는 TUI에서: `datalinq` 실행 → 마이그레이션 선택 → Enter. `sql/` 아래에 `NN_이름` 폴더를 더 떨구면 각각 메뉴 항목이 됩니다.
+
+<details>
+<summary><b>👉 데이터가 실제로 옮겨지는 걸 보고 싶다면? Docker로 완전 복붙 데모 — 내 DB가 없어도 됩니다.</b></summary>
+
+throwaway PostgreSQL 두 개를 띄우고, 소스를 채우고, 마이그레이션을 실행해 복사된 행을 출력합니다. (end-to-end 검증 완료)
+
+```bash
+# 1. throwaway Postgres 두 개 (소스 5433, 타겟 5434)
+docker run -d --name dl-src -p 5433:5432 -e POSTGRES_PASSWORD=demo postgres:16-alpine
+docker run -d --name dl-tgt -p 5434:5432 -e POSTGRES_PASSWORD=demo postgres:16-alpine
+sleep 5
+
+# 2. 소스 채우기 + 빈 타겟 테이블 생성
+docker exec dl-src psql -U postgres -c "CREATE TABLE customers(customer_id int, full_name text, created_at timestamp); INSERT INTO customers VALUES (1,'Alice',now()),(2,'Bob',now());"
+docker exec dl-tgt psql -U postgres -c "CREATE TABLE customers(id int primary key, name text, created timestamp);"
+
+# 3. 설정 + 마이그레이션 하나가 든 작업 폴더
+mkdir -p dl-demo/sql/01_Customers && cd dl-demo
+cat > application.yml <<'YAML'
+datasources:
+  my-source:
+    type: postgresql
+    host: localhost
+    port: 5433
+    database: postgres
+    username: postgres
+    password: demo
+  my-target:
+    type: postgresql
+    host: localhost
+    port: 5434
+    database: postgres
+    username: postgres
+    password: demo
+defaults:
+  source: my-source
+  target: my-target
+YAML
+cat > sql/01_Customers/source.sql <<'SQL'
+SELECT customer_id AS id, full_name AS name, created_at AS created FROM customers
+SQL
+printf 'type=etl\ntable=customers\n' > sql/01_Customers/operation.properties
+
+# 4. 실제 실행 후 타겟 확인
+datalinq run 0 --execute
+docker exec dl-tgt psql -U postgres -c "SELECT * FROM customers ORDER BY id;"   # -> Alice, Bob
+
+# 5. 정리
+cd .. && docker rm -f dl-src dl-tgt
+```
+
+</details>
+
 ## 마이그레이션 추가 = 폴더 떨구기
 
 ```

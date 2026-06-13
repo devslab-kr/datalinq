@@ -13,6 +13,146 @@ one-line `driver` download away. Connections are configured by **DB type + host/
 
 > By **DevsLab Co., Ltd.** (주식회사 데브스랩) · https://devslab.kr · Apache-2.0
 
+## Quick start
+
+From nothing to your first migration in five steps. Every block is copy-paste.
+
+### 1. Install
+
+```bash
+jbang app install datalinq@devslab-kr/datalinq   # creates the `datalinq` command (jbang provisions a JDK too)
+```
+
+> No jbang? Download `datalinq.jar` from the [latest release](https://github.com/devslab-kr/datalinq/releases/latest) and use `java -jar datalinq.jar` wherever this guide says `datalinq`. Needs **JDK 21+**.
+
+### 2. Look around — no database required
+
+```bash
+datalinq init     # scaffolds application.example.yml, i18n/, branding/, and a sample sql/ folder here
+datalinq list     # lists the migrations discovered under sql/
+datalinq          # opens the TUI (arrow keys / number keys to move, q or Esc to quit)
+```
+
+### 3. Point it at your databases
+
+`init` wrote `application.example.yml`. Copy it and fill in one source and one target:
+
+```bash
+cp application.example.yml application.yml
+```
+
+```yaml
+datasources:
+  my-source:
+    type: sqlserver          # sqlserver | mariadb | postgresql   (or: type: custom + a raw url:)
+    host: localhost
+    port: 1433
+    database: SourceDb
+    username: sa
+    password: "secret"
+  my-target:
+    type: postgresql
+    host: localhost
+    port: 5432
+    database: TargetDb
+    username: postgres
+    password: "secret"
+defaults:
+  source: my-source
+  target: my-target
+```
+
+```bash
+datalinq config   # verify it resolved (passwords are masked)
+```
+
+> Need a driver that isn't bundled (Oracle, H2, SQLite, ...)? Run `datalinq driver oracle`, then use `type: custom` + a JDBC `url:` for that datasource.
+
+### 4. Write your first migration
+
+A migration is just a folder under `sql/`. The simplest kind — **ETL** — copies rows from a source query into a target table. The SELECT's **column aliases become the target columns**, so you never hand-write an INSERT:
+
+```bash
+mkdir -p sql/01_Customers
+```
+
+`sql/01_Customers/source.sql`:
+
+```sql
+SELECT customer_id AS id,
+       full_name   AS name,
+       created_at  AS created
+FROM   customers
+```
+
+`sql/01_Customers/operation.properties`:
+
+```properties
+type=etl
+table=customers       # the target table to INSERT into
+```
+
+### 5. Run it — dry-run first, always
+
+```bash
+datalinq run 0             # DRY-RUN: reads the source, writes nothing (the target transaction is rolled back)
+datalinq run 0 --execute   # for real: one transaction, commit on success / rollback on any error
+```
+
+Or run it from the TUI: launch `datalinq`, pick the migration, press Enter. Drop more `NN_Name` folders under `sql/` and each becomes another menu item.
+
+<details>
+<summary><b>👉 Want to watch it actually move data? A complete, copy-paste demo with Docker — no database of your own needed.</b></summary>
+
+Spins up two throwaway PostgreSQL databases, seeds the source, runs the migration, and prints the copied rows. (Verified end-to-end.)
+
+```bash
+# 1. two throwaway Postgres databases (source on 5433, target on 5434)
+docker run -d --name dl-src -p 5433:5432 -e POSTGRES_PASSWORD=demo postgres:16-alpine
+docker run -d --name dl-tgt -p 5434:5432 -e POSTGRES_PASSWORD=demo postgres:16-alpine
+sleep 5
+
+# 2. seed the source; create the empty target table
+docker exec dl-src psql -U postgres -c "CREATE TABLE customers(customer_id int, full_name text, created_at timestamp); INSERT INTO customers VALUES (1,'Alice',now()),(2,'Bob',now());"
+docker exec dl-tgt psql -U postgres -c "CREATE TABLE customers(id int primary key, name text, created timestamp);"
+
+# 3. a working folder with config + one migration
+mkdir -p dl-demo/sql/01_Customers && cd dl-demo
+cat > application.yml <<'YAML'
+datasources:
+  my-source:
+    type: postgresql
+    host: localhost
+    port: 5433
+    database: postgres
+    username: postgres
+    password: demo
+  my-target:
+    type: postgresql
+    host: localhost
+    port: 5434
+    database: postgres
+    username: postgres
+    password: demo
+defaults:
+  source: my-source
+  target: my-target
+YAML
+cat > sql/01_Customers/source.sql <<'SQL'
+SELECT customer_id AS id, full_name AS name, created_at AS created FROM customers
+SQL
+printf 'type=etl\ntable=customers\n' > sql/01_Customers/operation.properties
+
+# 4. run for real, then check the target
+datalinq run 0 --execute
+docker exec dl-tgt psql -U postgres -c "SELECT * FROM customers ORDER BY id;"   # -> Alice, Bob
+
+# 5. clean up
+cd .. && docker rm -f dl-src dl-tgt
+```
+
+</details>
+
 ## Add a migration = drop a folder
 
 ```
