@@ -354,7 +354,7 @@ public final class DataLinqApp extends ToolkitApp {
             doDbTest();
             return EventResult.HANDLED;
         }
-        if (e.matches(Actions.SELECT)) { // Enter -> save
+        if (e.code() == KeyCode.ENTER) { // Enter -> save (not Actions.SELECT, which also binds Space)
             doDbSave();
             return EventResult.HANDLED;
         }
@@ -428,6 +428,20 @@ public final class DataLinqApp extends ToolkitApp {
     // ---- Settings screen ----
 
     private Element settingsScreen() {
+        Element center = c.folderPicker() ? folderPickerPanel() : settingsForm();
+        String keys = c.folderPicker() ? c.msg().get("picker.keys") : c.msg().get("settings.keys");
+        return dock()
+                .top(header())
+                .center(center)
+                .bottom(panel(text(" " + keys + " ").dim())
+                        .rounded()
+                        .borderColor(Color.DARK_GRAY))
+                .id("settings")
+                .focusable()
+                .onKeyEvent(this::onSettingsKey);
+    }
+
+    private Element settingsForm() {
         int active = c.settingsRow();
         String[] labels = {
                 c.msg().get("field.language"),
@@ -441,32 +455,37 @@ public final class DataLinqApp extends ToolkitApp {
         for (String l : labels) {
             w = Math.max(w, TextWidth.of(l));
         }
-
-        Element form = panel(column(
+        String sqlDir = c.setSqlDir().isEmpty() ? c.msg().get("field.sqlDirDefault") : c.setSqlDir();
+        return panel(column(
                 settingRow(labels[0], w, languageLabel(c.setLanguage()), false, active == 0),
                 settingRow(labels[1], w, boolLabel(c.setDryRun()), false, active == 1),
                 settingRow(labels[2], w, boolLabel(c.setMask()), false, active == 2),
                 settingRow(labels[3], w, c.setBatchSize(), true, active == 3),
                 settingRow(labels[4], w, c.setMaxParallel(), true, active == 4),
-                settingRow(labels[5], w, c.setSqlDir(), true, active == 5),
-                text(""),
-                text("  " + c.msg().get("field.sqlDirDefault")).dim(),
-                text("  " + c.msg().get("settings.restartNote")).dim(),
-                text(""),
-                text(c.settingsStatus()).yellow()))
+                settingRow(labels[5], w, sqlDir, false, active == 5),
+                text(c.msg().get("settings.restartNote")).dim(),
+                text(c.settingsStatus()).yellow())
+                .spacing(1))
                 .title(c.msg().get("settings.title"))
                 .rounded()
                 .borderColor(Color.CYAN);
+    }
 
-        return dock()
-                .top(header())
-                .center(form)
-                .bottom(panel(text(" " + c.msg().get("settings.keys") + " ").dim())
-                        .rounded()
-                        .borderColor(Color.DARK_GRAY))
-                .id("settings")
-                .focusable()
-                .onKeyEvent(this::onSettingsKey);
+    private Element folderPickerPanel() {
+        List<String> entries = c.browseEntries();
+        int idx = c.browseIndex();
+        List<Element> lines = new ArrayList<>();
+        for (int i = 0; i < entries.size(); i++) {
+            String e = entries.get(i);
+            String label = ".".equals(e) ? c.msg().get("picker.selectThis")
+                    : "..".equals(e) ? ".." : e + "/";
+            var line = text((i == idx ? "> " : "  ") + label);
+            lines.add(i == idx ? line.yellow().bold() : line.white());
+        }
+        return panel(column(lines.toArray(new Element[0])))
+                .title(c.browsePath())
+                .rounded()
+                .borderColor(Color.CYAN);
     }
 
     private Element settingRow(String label, int labelWidth, String value, boolean underline, boolean active) {
@@ -485,6 +504,9 @@ public final class DataLinqApp extends ToolkitApp {
     }
 
     private EventResult onSettingsKey(KeyEvent e) {
+        if (c.folderPicker()) {
+            return onPickerKey(e);
+        }
         if (e.matches(Actions.CANCEL)) { // Esc -> leave
             c.back();
             return EventResult.HANDLED;
@@ -497,19 +519,23 @@ public final class DataLinqApp extends ToolkitApp {
             c.settingsDown();
             return EventResult.HANDLED;
         }
-        if (e.matches(Actions.SELECT)) { // Enter -> save
+        if (e.code() == KeyCode.ENTER) { // save (Enter only - Actions.SELECT also binds Space)
             c.saveSettings();
             return EventResult.HANDLED;
         }
-        if (c.settingsRow() <= 2) { // language / dry-run / mask -> toggle
-            if (e.code() == KeyCode.LEFT || e.code() == KeyCode.RIGHT
-                    || (e.code() == KeyCode.CHAR && " ".equals(e.string()))) {
+        int row = c.settingsRow();
+        if (row <= 2) { // language / dry-run / mask -> toggle with Space or Left/Right
+            if (e.code() == KeyCode.LEFT || e.code() == KeyCode.RIGHT || isSpace(e)) {
                 c.settingsToggle();
                 return EventResult.HANDLED;
             }
             return EventResult.UNHANDLED;
         }
-        // text rows: batch-size / max-parallel / sql-dir
+        if (row == 5 && isSpace(e)) { // sql-dir: Space opens the folder picker
+            c.openFolderPicker();
+            return EventResult.HANDLED;
+        }
+        // text rows: batch-size / max-parallel (digits) / sql-dir (manual entry)
         if (e.code() == KeyCode.BACKSPACE) {
             c.settingsBackspace();
             return EventResult.HANDLED;
@@ -519,6 +545,30 @@ public final class DataLinqApp extends ToolkitApp {
             return EventResult.HANDLED;
         }
         return EventResult.UNHANDLED;
+    }
+
+    private EventResult onPickerKey(KeyEvent e) {
+        if (e.matches(Actions.CANCEL)) {
+            c.closeFolderPicker();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.UP) {
+            c.browseUp();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.DOWN) {
+            c.browseDown();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.ENTER) {
+            c.browseActivate();
+            return EventResult.HANDLED;
+        }
+        return EventResult.UNHANDLED;
+    }
+
+    private static boolean isSpace(KeyEvent e) {
+        return e.code() == KeyCode.CHAR && " ".equals(e.string());
     }
 
     private static String boolLabel(boolean on) {

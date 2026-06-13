@@ -10,7 +10,10 @@ import kr.devslab.datalinq.i18n.Messages;
 import kr.devslab.datalinq.ui.DataLinqController.Center;
 import kr.devslab.datalinq.ui.DataLinqController.Entry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -346,6 +349,36 @@ class DataLinqControllerTest {
         assertEquals(1, gw.settingsSaves);
         assertFalse(gw.maskPassword);  // persisted
         assertFalse(c.maskPassword()); // applied live
+    }
+
+    @Test
+    void folderPickerBrowsesIntoASubdirAndSelectsIt(@TempDir Path dir) throws IOException {
+        Files.createDirectory(dir.resolve("alpha"));
+        Files.createDirectory(dir.resolve("beta"));
+        DataLinqController c = controller((op, dry, log) -> 0);
+        c.openSettings();
+        c.setSettingsRow(5); // sql-dir
+        for (char ch : dir.toString().toCharArray()) {
+            c.settingsType(String.valueOf(ch)); // seed the picker's start folder
+        }
+        c.openFolderPicker();
+        assertTrue(c.folderPicker());
+        assertEquals(".", c.browseEntries().get(0));
+        assertEquals("..", c.browseEntries().get(1));
+        assertTrue(c.browseEntries().contains("alpha"));
+
+        while (!c.browseEntries().get(c.browseIndex()).equals("alpha")) {
+            c.browseDown();
+        }
+        c.browseActivate(); // descend into alpha
+        assertTrue(c.browsePath().endsWith("alpha"));
+
+        while (c.browseIndex() > 0) {
+            c.browseUp();
+        }
+        c.browseActivate(); // "." selects this folder
+        assertFalse(c.folderPicker());
+        assertTrue(c.setSqlDir().endsWith("alpha"));
     }
 
     @Test

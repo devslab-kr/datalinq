@@ -8,10 +8,15 @@ import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.engine.BatchRunner;
 import kr.devslab.datalinq.i18n.Messages;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * The Controller in tamboui's recommended MVC: it owns ALL application state and exposes
@@ -126,6 +131,12 @@ public final class DataLinqController {
     private String setSqlDir = "";
     private String settingsStatus = "";
 
+    // Settings: folder picker sub-state (browses real directories to choose the sql folder)
+    private boolean folderPicker;
+    private String browsePath = "";
+    private final List<String> browseEntries = new ArrayList<>();
+    private int browseIndex;
+
     public DataLinqController(Messages msg, boolean dryRunDefault, int maxParallel,
                               OperationProvider provider, Runner runner, DatasourceGateway datasources,
                               SettingsGateway settings, boolean maskPassword) {
@@ -219,6 +230,13 @@ public final class DataLinqController {
     public String setMaxParallel() { return setMaxParallel; }
     public String setSqlDir()      { return setSqlDir; }
     public String settingsStatus() { return settingsStatus; }
+
+    // ---- Folder picker queries ----
+
+    public boolean folderPicker()      { return folderPicker; }
+    public String browsePath()         { return browsePath; }
+    public List<String> browseEntries() { return List.copyOf(browseEntries); }
+    public int browseIndex()           { return browseIndex; }
 
     public Entry pendingConfirm() {
         return pendingConfirm;
@@ -404,6 +422,7 @@ public final class DataLinqController {
         screen = Screen.SETTINGS;
         settingsRow = 0;
         settingsStatus = "";
+        folderPicker = false;
         setLanguage = settings.language();
         setDryRun = settings.dryRunDefault();
         setMask = settings.maskPassword();
@@ -503,6 +522,74 @@ public final class DataLinqController {
             return Integer.parseInt(s.trim());
         } catch (NumberFormatException e) {
             return fallback;
+        }
+    }
+
+    // ---- Folder picker commands (browse real directories to choose the sql folder) ----
+
+    public void openFolderPicker() {
+        String start = (setSqlDir == null || setSqlDir.isBlank())
+                ? System.getProperty("user.dir") : setSqlDir;
+        Path p = Paths.get(start);
+        if (!Files.isDirectory(p)) {
+            p = Paths.get(System.getProperty("user.dir"));
+        }
+        browsePath = p.toAbsolutePath().normalize().toString();
+        refreshBrowse();
+        browseIndex = 0;
+        folderPicker = true;
+    }
+
+    public void closeFolderPicker() {
+        folderPicker = false;
+    }
+
+    public void browseUp() {
+        if (browseIndex > 0) {
+            browseIndex--;
+        }
+    }
+
+    public void browseDown() {
+        if (browseIndex < browseEntries.size() - 1) {
+            browseIndex++;
+        }
+    }
+
+    /** Enter on the highlighted entry: "." selects this folder, ".." goes up, else descends. */
+    public void browseActivate() {
+        if (browseIndex < 0 || browseIndex >= browseEntries.size()) {
+            return;
+        }
+        String entry = browseEntries.get(browseIndex);
+        if (".".equals(entry)) {
+            setSqlDir = browsePath;
+            folderPicker = false;
+        } else if ("..".equals(entry)) {
+            Path parent = Paths.get(browsePath).toAbsolutePath().normalize().getParent();
+            if (parent != null) {
+                browsePath = parent.toString();
+                refreshBrowse();
+                browseIndex = 0;
+            }
+        } else {
+            browsePath = Paths.get(browsePath).resolve(entry).normalize().toString();
+            refreshBrowse();
+            browseIndex = 0;
+        }
+    }
+
+    private void refreshBrowse() {
+        browseEntries.clear();
+        browseEntries.add(".");  // select this folder
+        browseEntries.add(".."); // go up
+        try (Stream<Path> entries = Files.list(Paths.get(browsePath))) {
+            entries.filter(Files::isDirectory)
+                    .map(p -> p.getFileName().toString())
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .forEach(browseEntries::add);
+        } catch (IOException ignored) {
+            // unreadable directory -> just "." and ".."
         }
     }
 
