@@ -70,6 +70,18 @@ public final class AppConfigDatasourceGateway implements DatasourceGateway, Sett
     }
 
     @Override
+    public void setDefaultSource(String name) throws Exception {
+        config.setDefaultSource(name);
+        config.save();
+    }
+
+    @Override
+    public void setDefaultTarget(String name) throws Exception {
+        config.setDefaultTarget(name);
+        config.save();
+    }
+
+    @Override
     public void remove(String name) throws Exception {
         config.removeDatasource(name);
         config.save();

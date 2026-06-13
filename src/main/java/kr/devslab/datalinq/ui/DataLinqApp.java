@@ -297,13 +297,15 @@ public final class DataLinqApp extends ToolkitApp {
         } else {
             List<Element> dsLines = new ArrayList<>();
             for (int i = 0; i < names.size(); i++) {
-                String n = names.get(i);
-                String marks = (c.isDefaultSource(n) ? " [S]" : "") + (c.isDefaultTarget(n) ? " [T]" : "");
                 boolean here = (i == c.dsIndex());
-                var line = text((here ? "> " : "  ") + n + marks);
+                var line = text((here ? "> " : "  ") + names.get(i));
                 dsLines.add(here ? line.yellow().bold() : line.white());
             }
-            Element dsPanel = panel(column(dsLines.toArray(new Element[0])).spacing(1))
+            Element nameList = column(dsLines.toArray(new Element[0])).spacing(1);
+            Element defaults = column(
+                    text(c.msg().get("db.defaultSource") + ": " + orDash(c.defaultSourceName())).cyan(),
+                    text(c.msg().get("db.defaultTarget") + ": " + orDash(c.defaultTargetName())).cyan());
+            Element dsPanel = panel(column(nameList, text(""), defaults))
                     .title(c.msg().get("menu.dbConnection")).rounded()
                     .borderColor(dbFieldsPane ? Color.DARK_GRAY : Color.CYAN);
 
@@ -379,6 +381,14 @@ public final class DataLinqApp extends ToolkitApp {
         if (e.code() == KeyCode.RIGHT) { // cross into the edit fields
             dbFieldsPane = true;
             dbField = 0;
+            return EventResult.HANDLED;
+        }
+        if (isChar(e, "s") || isChar(e, "S")) { // set selected datasource as the default source
+            c.makeDefaultSource();
+            return EventResult.HANDLED;
+        }
+        if (isChar(e, "t") || isChar(e, "T")) { // set selected datasource as the default target
+            c.makeDefaultTarget();
             return EventResult.HANDLED;
         }
         return EventResult.UNHANDLED;
@@ -588,6 +598,10 @@ public final class DataLinqApp extends ToolkitApp {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    private static String orDash(String s) {
+        return (s == null || s.isEmpty()) ? "-" : s;
     }
 
     private static boolean isChar(KeyEvent e, String s) {

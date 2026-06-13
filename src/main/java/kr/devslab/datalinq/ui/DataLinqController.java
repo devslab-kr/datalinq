@@ -55,6 +55,10 @@ public final class DataLinqController {
         void save(String name, String url, String username, String password,
                   boolean asDefaultSource, boolean asDefaultTarget) throws Exception;
 
+        void setDefaultSource(String name) throws Exception;
+
+        void setDefaultTarget(String name) throws Exception;
+
         void remove(String name) throws Exception;
 
         /** Attempts a connection; returns {@code null} on success, otherwise an error message. */
@@ -205,6 +209,8 @@ public final class DataLinqController {
     public String password(String name) { return datasources.password(name); }
     public boolean isDefaultSource(String name) { return name != null && name.equals(datasources.defaultSource()); }
     public boolean isDefaultTarget(String name) { return name != null && name.equals(datasources.defaultTarget()); }
+    public String defaultSourceName() { return datasources.defaultSource(); }
+    public String defaultTargetName() { return datasources.defaultTarget(); }
 
     /** Status line for the DB Connection screen (test / save result); volatile - set off-thread. */
     public String dbStatus() {
@@ -401,6 +407,36 @@ public final class DataLinqController {
         dbStatus = (error == null)
                 ? msg.get("status.connectionOk", name)
                 : msg.get("status.connectionFail", name, error);
+        log(dbStatus);
+    }
+
+    /** Sets the selected datasource as the default source (the fallback for operations). */
+    public void makeDefaultSource() {
+        String name = selectedDatasource();
+        if (name == null) {
+            return;
+        }
+        try {
+            datasources.setDefaultSource(name);
+            dbStatus = msg.get("status.defaultSourceSet", name);
+        } catch (Exception e) {
+            dbStatus = msg.get("status.saveFailed", name, e.getMessage());
+        }
+        log(dbStatus);
+    }
+
+    /** Sets the selected datasource as the default target (the fallback for operations). */
+    public void makeDefaultTarget() {
+        String name = selectedDatasource();
+        if (name == null) {
+            return;
+        }
+        try {
+            datasources.setDefaultTarget(name);
+            dbStatus = msg.get("status.defaultTargetSet", name);
+        } catch (Exception e) {
+            dbStatus = msg.get("status.saveFailed", name, e.getMessage());
+        }
         log(dbStatus);
     }
 

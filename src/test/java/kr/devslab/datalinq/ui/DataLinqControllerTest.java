@@ -103,6 +103,12 @@ class DataLinqControllerTest {
             }
             saves++;
         }
+        @Override public void setDefaultSource(String name) {
+            defaultSource = name;
+        }
+        @Override public void setDefaultTarget(String name) {
+            defaultTarget = name;
+        }
         @Override public void remove(String name) {
             ds.remove(name);
         }
@@ -295,6 +301,21 @@ class DataLinqControllerTest {
         assertEquals("jdbc:new", gw.url("a"));
         assertEquals("a", gw.defaultSource());
         assertTrue(c.dbStatus().contains("a"));
+    }
+
+    @Test
+    void settingDefaultSourceAndTargetPersistsThroughGateway() {
+        FakeGateway gw = new FakeGateway().with("a", "u", "", "").with("b", "u2", "", "");
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+        c.openDbConnection();
+        c.setDsIndex(0); // "a"
+        c.makeDefaultSource();
+        assertEquals("a", gw.defaultSource());
+        c.setDsIndex(1); // "b"
+        c.makeDefaultTarget();
+        assertEquals("b", gw.defaultTarget());
+        assertEquals("a", c.defaultSourceName());
+        assertEquals("b", c.defaultTargetName());
     }
 
     // ---- Settings ----
