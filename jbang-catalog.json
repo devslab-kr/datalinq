@@ -1,7 +1,7 @@
 {
   "aliases": {
     "datalinq": {
-      "script-ref": "build/libs/datalinq.jar",
+      "script-ref": "https://github.com/devslab-kr/datalinq/releases/latest/download/datalinq.jar",
       "description": "DataLinq - cross-vendor JDBC data-migration TUI (DevsLab Co., Ltd.)",
       "java-options": [
         "-Dstdout.encoding=UTF-8",

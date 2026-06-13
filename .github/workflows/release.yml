@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build the fat jar
+        run: ./gradlew shadowJar --no-daemon
+
+      # shadowJar produces an unversioned `datalinq.jar`, so the asset name is stable and
+      # releases/latest/download/datalinq.jar always resolves - that is exactly what the jbang
+      # catalog points at. Pushing a `v*` tag therefore auto-publishes the jbang-installable jar.
+      - name: Publish the release with the fat jar
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/datalinq.jar
+          generate_release_notes: true

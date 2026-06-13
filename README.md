@@ -121,24 +121,39 @@ also be edited from inside the app (DB Connection screen) and saved.
 - `destructive=true` operations require an explicit confirmation before running.
 - Each operation runs in **one target transaction**: commit on success, rollback on any error.
 
-## Run
+## Install & run
 
-The default command is the **TUI**; everything is also scriptable from the CLI.
+The default command is the **TUI**; every subcommand is also scriptable.
+
+### With jbang (recommended)
+
+[jbang](https://www.jbang.dev/) installs DataLinq as a real `datalinq` command and will even
+provision a JDK for you if none is present:
 
 ```bash
-./gradlew shadowJar                             # build the self-contained jar
-java -jar build/libs/datalinq.jar               # TUI menu (Migrations / DB Connection / Settings / About)
-
-# or via the CLI:
-java -jar build/libs/datalinq.jar init          # write editable defaults (i18n/, branding/, example config, sql/)
-java -jar build/libs/datalinq.jar list          # list discovered operations
-java -jar build/libs/datalinq.jar config        # show resolved config (passwords masked)
-java -jar build/libs/datalinq.jar run 0         # dry-run operation #0
-java -jar build/libs/datalinq.jar run 0 --execute   # actually write
+jbang app install datalinq@devslab-kr/datalinq   # once - creates the `datalinq` command
+datalinq                                          # launch the TUI (Migrations / DB Connection / Settings / About)
+datalinq init                                     # write editable defaults (i18n/, branding/, example config, sql/)
+datalinq list                                     # list discovered operations
+datalinq run 0                                    # dry-run operation #0
+datalinq run 0 --execute                          # actually write
 ```
 
-The jar is a single droppable artifact (Shadow fat-jar, with a [jbang](https://www.jbang.dev/)
-alias in `jbang-catalog.json`). During development `./gradlew run --args="..."` works too.
+Or run it once without installing: `jbang datalinq@devslab-kr/datalinq`.
+
+### With the jar (no jbang)
+
+Download `datalinq.jar` from the [latest release](https://github.com/devslab-kr/datalinq/releases/latest)
+(needs **JDK 21+**) and run it directly - `java -jar datalinq.jar <command>` is equivalent to
+`datalinq <command>`:
+
+```bash
+java -jar datalinq.jar              # TUI
+java -jar datalinq.jar config       # show resolved config (passwords masked)
+java -jar datalinq.jar run 0 --execute
+```
+
+During development `./gradlew run --args="..."` works too; `./gradlew shadowJar` builds the jar.
 
 ## Status
 
