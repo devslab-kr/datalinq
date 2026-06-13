@@ -5,17 +5,18 @@
 package kr.devslab.datalinq.config;
 
 import kr.devslab.datalinq.ui.DataLinqController.DatasourceGateway;
+import kr.devslab.datalinq.ui.DataLinqController.SettingsGateway;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.List;
 
 /**
- * Production {@link DatasourceGateway} backed by {@link AppConfig} (read + persist) and the
- * JDBC {@link DriverManager} (connection test). Kept out of the controller so the controller
- * stays free of config and JDBC and remains unit-testable with a fake gateway.
+ * Production gateway backed by {@link AppConfig} (read + persist) and the JDBC
+ * {@link DriverManager} (connection test). Implements both the datasource and the settings ports
+ * so the controller stays free of config and JDBC and remains unit-testable with a fake gateway.
  */
-public final class AppConfigDatasourceGateway implements DatasourceGateway {
+public final class AppConfigDatasourceGateway implements DatasourceGateway, SettingsGateway {
 
     private static final int TEST_TIMEOUT_SECONDS = 5;
 
@@ -71,6 +72,50 @@ public final class AppConfigDatasourceGateway implements DatasourceGateway {
     @Override
     public void remove(String name) throws Exception {
         config.removeDatasource(name);
+        config.save();
+    }
+
+    // ---- SettingsGateway ----
+
+    @Override
+    public String language() {
+        return config.language();
+    }
+
+    @Override
+    public boolean dryRunDefault() {
+        return config.dryRunDefault();
+    }
+
+    @Override
+    public boolean maskPassword() {
+        return config.maskPassword();
+    }
+
+    @Override
+    public int batchSize() {
+        return config.batchSize();
+    }
+
+    @Override
+    public int maxParallel() {
+        return config.maxParallel();
+    }
+
+    @Override
+    public String sqlDir() {
+        return config.sqlDir();
+    }
+
+    @Override
+    public void save(String language, boolean dryRunDefault, boolean maskPassword,
+                     int batchSize, int maxParallel, String sqlDir) throws Exception {
+        config.setOption("language", language);
+        config.setOption("dry-run-default", dryRunDefault);
+        config.setOption("mask-password", maskPassword);
+        config.setOption("batch-size", batchSize);
+        config.setOption("max-parallel", maxParallel);
+        config.setOption("sql-dir", sqlDir);
         config.save();
     }
 

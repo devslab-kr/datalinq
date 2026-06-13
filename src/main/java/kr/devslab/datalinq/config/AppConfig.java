@@ -170,6 +170,11 @@ public final class AppConfig {
         child(root, "options").put("sql-dir", dir);
     }
 
+    /** Sets an arbitrary {@code options.<key>} value (used by the Settings screen). */
+    public void setOption(String key, Object value) {
+        child(root, "options").put(key, value);
+    }
+
     /** Max operations run concurrently ({@code options.max-parallel}); bounds DB connections. */
     public int maxParallel() {
         Object v = path("options", "max-parallel");

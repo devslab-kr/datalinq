@@ -22,7 +22,10 @@ import java.util.function.Consumer;
 public final class DataLinqController {
 
     /** The active full screen. MAIN is the menu + output; others are dedicated editors. */
-    public enum Screen { MAIN, DB_CONNECTION }
+    public enum Screen { MAIN, DB_CONNECTION, SETTINGS }
+
+    /** The number of editable rows on the Settings screen. */
+    public static final int SETTINGS_ROWS = 6;
 
     /** What the centre panel shows on the MAIN screen. */
     public enum Center { OUTPUT, ABOUT, CONFIRM }
@@ -53,6 +56,27 @@ public final class DataLinqController {
         String test(String url, String username, String password);
     }
 
+    /**
+     * Port for reading / persisting the {@code options.*} settings, kept TUI- and config-free so
+     * the controller stays unit-testable (prod: backed by AppConfig; test: a fake).
+     */
+    public interface SettingsGateway {
+        String language();
+
+        boolean dryRunDefault();
+
+        boolean maskPassword();
+
+        int batchSize();
+
+        int maxParallel();
+
+        String sqlDir();
+
+        void save(String language, boolean dryRunDefault, boolean maskPassword,
+                  int batchSize, int maxParallel, String sqlDir) throws Exception;
+    }
+
     /** A menu entry: a fixed base action, or a discovered migration. */
     public record Entry(Kind kind, String label, Operation operation) {
         public enum Kind { SETTINGS, DB_CONNECTION, ABOUT, QUIT, MIGRATION }
@@ -75,6 +99,7 @@ public final class DataLinqController {
     private final OperationProvider provider;
     private final Runner runner;
     private final DatasourceGateway datasources;
+    private final SettingsGateway settings;
 
     private final List<Entry> entries = new ArrayList<>();
     private final List<String> output = Collections.synchronizedList(new ArrayList<>());
@@ -91,15 +116,26 @@ public final class DataLinqController {
     private volatile String dbStatus = "";
     private boolean maskPassword;
 
+    // Settings screen state (edit buffers seeded from the gateway on entry)
+    private int settingsRow;
+    private String setLanguage = "";
+    private boolean setDryRun;
+    private boolean setMask;
+    private String setBatchSize = "";
+    private String setMaxParallel = "";
+    private String setSqlDir = "";
+    private String settingsStatus = "";
+
     public DataLinqController(Messages msg, boolean dryRunDefault, int maxParallel,
                               OperationProvider provider, Runner runner, DatasourceGateway datasources,
-                              boolean maskPassword) {
+                              SettingsGateway settings, boolean maskPassword) {
         this.msg = msg;
         this.dryRun = dryRunDefault;
         this.maxParallel = Math.max(1, maxParallel);
         this.provider = provider;
         this.runner = runner;
         this.datasources = datasources;
+        this.settings = settings;
         this.maskPassword = maskPassword;
     }
 
@@ -172,6 +208,17 @@ public final class DataLinqController {
     public void setMaskPassword(boolean mask) {
         this.maskPassword = mask;
     }
+
+    // ---- Settings queries ----
+
+    public int settingsRow()       { return settingsRow; }
+    public String setLanguage()    { return setLanguage; }
+    public boolean setDryRun()     { return setDryRun; }
+    public boolean setMask()       { return setMask; }
+    public String setBatchSize()   { return setBatchSize; }
+    public String setMaxParallel() { return setMaxParallel; }
+    public String setSqlDir()      { return setSqlDir; }
+    public String settingsStatus() { return settingsStatus; }
 
     public Entry pendingConfirm() {
         return pendingConfirm;
@@ -247,10 +294,7 @@ public final class DataLinqController {
             case ABOUT -> center = Center.ABOUT;
             case QUIT -> quitRequested = true;
             case DB_CONNECTION -> openDbConnection();
-            case SETTINGS -> {
-                center = Center.OUTPUT;
-                log("(" + e.label() + " - coming soon)");
-            }
+            case SETTINGS -> openSettings();
             case MIGRATION -> {
                 Operation op = e.operation();
                 if (op.destructive() && !dryRun) {
@@ -285,8 +329,9 @@ public final class DataLinqController {
     }
 
     public void back() {
-        if (screen != Screen.MAIN) {
-            closeDbConnection();
+        if (screen == Screen.DB_CONNECTION || screen == Screen.SETTINGS) {
+            screen = Screen.MAIN;
+            center = Center.OUTPUT;
             return;
         }
         center = Center.OUTPUT;
@@ -351,6 +396,114 @@ public final class DataLinqController {
             dbStatus = msg.get("status.saveFailed", name, e.getMessage());
         }
         log(dbStatus);
+    }
+
+    // ---- Settings commands ----
+
+    public void openSettings() {
+        screen = Screen.SETTINGS;
+        settingsRow = 0;
+        settingsStatus = "";
+        setLanguage = settings.language();
+        setDryRun = settings.dryRunDefault();
+        setMask = settings.maskPassword();
+        setBatchSize = Integer.toString(settings.batchSize());
+        setMaxParallel = Integer.toString(settings.maxParallel());
+        setSqlDir = settings.sqlDir();
+    }
+
+    public void setSettingsRow(int row) {
+        settingsRow = Math.max(0, Math.min(SETTINGS_ROWS - 1, row));
+    }
+
+    public void settingsUp() {
+        setSettingsRow(settingsRow - 1);
+    }
+
+    public void settingsDown() {
+        setSettingsRow(settingsRow + 1);
+    }
+
+    /** Toggles the active boolean/choice row (language cycle, dry-run, mask); no-op on text rows. */
+    public void settingsToggle() {
+        switch (settingsRow) {
+            case 0 -> setLanguage = cycleLanguage(setLanguage);
+            case 1 -> setDryRun = !setDryRun;
+            case 2 -> setMask = !setMask;
+            default -> { /* text rows are edited by typing */ }
+        }
+    }
+
+    /** Appends a typed character to the active text row (digits only for the numeric rows). */
+    public void settingsType(String ch) {
+        if (ch == null || ch.isEmpty()) {
+            return;
+        }
+        switch (settingsRow) {
+            case 3 -> { if (isDigit(ch)) setBatchSize += ch; }
+            case 4 -> { if (isDigit(ch)) setMaxParallel += ch; }
+            case 5 -> setSqlDir += ch;
+            default -> { /* boolean/choice rows ignore typing */ }
+        }
+    }
+
+    public void settingsBackspace() {
+        switch (settingsRow) {
+            case 3 -> setBatchSize = chop(setBatchSize);
+            case 4 -> setMaxParallel = chop(setMaxParallel);
+            case 5 -> setSqlDir = chop(setSqlDir);
+            default -> { /* nothing to delete on boolean/choice rows */ }
+        }
+    }
+
+    /**
+     * Persists the edited options. mask-password applies live; a changed sql-dir triggers a
+     * rescan so the menu reflects the new folder immediately. language/batch-size/max-parallel
+     * take effect on the next launch.
+     */
+    public void saveSettings() {
+        int batch = parseIntOr(setBatchSize, settings.batchSize());
+        int parallel = Math.max(1, parseIntOr(setMaxParallel, settings.maxParallel()));
+        String previousSqlDir = settings.sqlDir();
+        try {
+            settings.save(setLanguage, setDryRun, setMask, batch, parallel, setSqlDir);
+            setBatchSize = Integer.toString(batch);
+            setMaxParallel = Integer.toString(parallel);
+            maskPassword = setMask; // live
+            settingsStatus = msg.get("status.saved", "settings");
+            if (!setSqlDir.equals(previousSqlDir)) {
+                rescan(); // the menu reflects the new sql folder right away
+            }
+        } catch (Exception e) {
+            settingsStatus = msg.get("status.saveFailed", "settings", e.getMessage());
+        }
+    }
+
+    private static String cycleLanguage(String current) {
+        // en -> ko -> (blank = system) -> en
+        if ("en".equals(current)) {
+            return "ko";
+        }
+        if ("ko".equals(current)) {
+            return "";
+        }
+        return "en";
+    }
+
+    private static boolean isDigit(String ch) {
+        return ch.length() == 1 && Character.isDigit(ch.charAt(0));
+    }
+
+    private static String chop(String s) {
+        return s.isEmpty() ? s : s.substring(0, s.length() - 1);
+    }
+
+    private static int parseIntOr(String s, int fallback) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     /** Runs one migration. Synchronous; the View may call it on a virtual thread. */

@@ -89,6 +89,9 @@ public final class DataLinqApp extends ToolkitApp {
         if (c.screen() == DataLinqController.Screen.DB_CONNECTION) {
             return dbScreen();
         }
+        if (c.screen() == DataLinqController.Screen.SETTINGS) {
+            return settingsScreen();
+        }
 
         List<Entry> entries = c.entries();
         List<String> labels = new ArrayList<>();
@@ -420,6 +423,110 @@ public final class DataLinqApp extends ToolkitApp {
         if (name != null) {
             c.saveDatasource(name, dbBuf[0], dbBuf[1], dbBuf[2], false, false);
         }
+    }
+
+    // ---- Settings screen ----
+
+    private Element settingsScreen() {
+        int active = c.settingsRow();
+        String[] labels = {
+                c.msg().get("field.language"),
+                c.msg().get("field.dryRun"),
+                c.msg().get("field.maskPassword"),
+                c.msg().get("field.batchSize"),
+                c.msg().get("field.maxParallel"),
+                c.msg().get("field.sqlDir"),
+        };
+        int w = 0;
+        for (String l : labels) {
+            w = Math.max(w, TextWidth.of(l));
+        }
+
+        Element form = panel(column(
+                settingRow(labels[0], w, languageLabel(c.setLanguage()), false, active == 0),
+                settingRow(labels[1], w, boolLabel(c.setDryRun()), false, active == 1),
+                settingRow(labels[2], w, boolLabel(c.setMask()), false, active == 2),
+                settingRow(labels[3], w, c.setBatchSize(), true, active == 3),
+                settingRow(labels[4], w, c.setMaxParallel(), true, active == 4),
+                settingRow(labels[5], w, c.setSqlDir(), true, active == 5),
+                text(""),
+                text("  " + c.msg().get("field.sqlDirDefault")).dim(),
+                text("  " + c.msg().get("settings.restartNote")).dim(),
+                text(""),
+                text(c.settingsStatus()).yellow()))
+                .title(c.msg().get("settings.title"))
+                .rounded()
+                .borderColor(Color.CYAN);
+
+        return dock()
+                .top(header())
+                .center(form)
+                .bottom(panel(text(" " + c.msg().get("settings.keys") + " ").dim())
+                        .rounded()
+                        .borderColor(Color.DARK_GRAY))
+                .id("settings")
+                .focusable()
+                .onKeyEvent(this::onSettingsKey);
+    }
+
+    private Element settingRow(String label, int labelWidth, String value, boolean underline, boolean active) {
+        var labelEl = text((active ? "> " : "  ") + TextWidth.pad(label, labelWidth) + " : ");
+        String shown = value;
+        if (underline) {
+            shown = value + (active ? "█" : "");
+            while (TextWidth.of(shown) < FIELD_WIDTH) {
+                shown += " ";
+            }
+        }
+        var valueEl = underline ? text(shown).underlined() : text(shown);
+        return active
+                ? row(labelEl.yellow().bold(), valueEl.yellow())
+                : row(labelEl.white(), valueEl.white());
+    }
+
+    private EventResult onSettingsKey(KeyEvent e) {
+        if (e.matches(Actions.CANCEL)) { // Esc -> leave
+            c.back();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.UP) {
+            c.settingsUp();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.DOWN) {
+            c.settingsDown();
+            return EventResult.HANDLED;
+        }
+        if (e.matches(Actions.SELECT)) { // Enter -> save
+            c.saveSettings();
+            return EventResult.HANDLED;
+        }
+        if (c.settingsRow() <= 2) { // language / dry-run / mask -> toggle
+            if (e.code() == KeyCode.LEFT || e.code() == KeyCode.RIGHT
+                    || (e.code() == KeyCode.CHAR && " ".equals(e.string()))) {
+                c.settingsToggle();
+                return EventResult.HANDLED;
+            }
+            return EventResult.UNHANDLED;
+        }
+        // text rows: batch-size / max-parallel / sql-dir
+        if (e.code() == KeyCode.BACKSPACE) {
+            c.settingsBackspace();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.CHAR && e.string() != null) {
+            c.settingsType(e.string());
+            return EventResult.HANDLED;
+        }
+        return EventResult.UNHANDLED;
+    }
+
+    private static String boolLabel(boolean on) {
+        return on ? "[x]" : "[ ]";
+    }
+
+    private String languageLabel(String lang) {
+        return (lang == null || lang.isEmpty()) ? "(system)" : lang;
     }
 
     private static String nullToEmpty(String s) {

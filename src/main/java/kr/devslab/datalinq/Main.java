@@ -49,7 +49,7 @@ public final class Main {
         String cmd = args.length > 0 ? args[0] : "tui";
 
         switch (cmd) {
-            case "tui" -> launchTui(home, config, sqlRoot);
+            case "tui" -> launchTui(home, config);
             case "init" -> initScaffold();
             case "list" -> printList(sqlRoot, ops);
             case "config" -> printConfig(config, sqlRoot);
@@ -218,16 +218,18 @@ public final class Main {
         System.out.println("done.");
     }
 
-    private static void launchTui(Home home, AppConfig config, Path sqlRoot) throws Exception {
+    private static void launchTui(Home home, AppConfig config) throws Exception {
         Messages msg = Messages.load(home.resolve("i18n"), config.language());
         List<String> logo = Logo.load(home.resolve("branding/logo.txt"));
-        OperationScanner scanner = new OperationScanner(sqlRoot);
         MigrationEngine engine = new MigrationEngine(config);
+        AppConfigDatasourceGateway gateway = new AppConfigDatasourceGateway(config);
         DataLinqController controller = new DataLinqController(
                 msg, config.dryRunDefault(), config.maxParallel(),
-                scanner::scan,
+                // resolve sql-dir on every scan, so changing it in Settings rescans the new folder
+                () -> new OperationScanner(resolveSqlRoot(home, config)).scan(),
                 engine::run,
-                new AppConfigDatasourceGateway(config),
+                gateway,      // DatasourceGateway
+                gateway,      // SettingsGateway
                 config.maskPassword());
         new DataLinqApp(controller, logo, aboutLines(msg)).run();
     }

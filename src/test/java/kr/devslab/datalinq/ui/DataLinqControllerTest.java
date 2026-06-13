@@ -39,21 +39,32 @@ class DataLinqControllerTest {
         return controller(new FakeGateway(), runner, ops);
     }
 
-    private static DataLinqController controller(DataLinqController.DatasourceGateway gateway,
+    private static DataLinqController controller(FakeGateway gateway,
                                                  DataLinqController.Runner runner, Operation... ops) {
-        DataLinqController c = new DataLinqController(MSG, true, 4, () -> List.of(ops), runner, gateway, true);
+        DataLinqController c = new DataLinqController(
+                MSG, true, 4, () -> List.of(ops), runner, gateway, gateway, true);
         c.init();
         return c;
     }
 
-    /** In-memory datasource gateway - records save/test calls, no JDBC. */
-    private static final class FakeGateway implements DataLinqController.DatasourceGateway {
+    /** In-memory gateway for both ports - records save/test calls, no JDBC, no config file. */
+    private static final class FakeGateway
+            implements DataLinqController.DatasourceGateway, DataLinqController.SettingsGateway {
         final Map<String, String[]> ds = new LinkedHashMap<>(); // name -> [url, user, pass]
         String defaultSource = "";
         String defaultTarget = "";
         String testResult; // null = success
         int saves;
         int tests;
+
+        // settings state
+        String language = "en";
+        boolean dryRunDefault = true;
+        boolean maskPassword = true;
+        int batchSize = 1000;
+        int maxParallel = 4;
+        String sqlDir = "";
+        int settingsSaves;
 
         FakeGateway with(String name, String url, String user, String pass) {
             ds.put(name, new String[]{url, user, pass});
@@ -95,6 +106,36 @@ class DataLinqControllerTest {
         @Override public String test(String url, String user, String pass) {
             tests++;
             return testResult;
+        }
+
+        // ---- SettingsGateway ----
+        @Override public String language() {
+            return language;
+        }
+        @Override public boolean dryRunDefault() {
+            return dryRunDefault;
+        }
+        @Override public boolean maskPassword() {
+            return maskPassword;
+        }
+        @Override public int batchSize() {
+            return batchSize;
+        }
+        @Override public int maxParallel() {
+            return maxParallel;
+        }
+        @Override public String sqlDir() {
+            return sqlDir;
+        }
+        @Override public void save(String language, boolean dryRunDefault, boolean maskPassword,
+                                   int batchSize, int maxParallel, String sqlDir) {
+            this.language = language;
+            this.dryRunDefault = dryRunDefault;
+            this.maskPassword = maskPassword;
+            this.batchSize = batchSize;
+            this.maxParallel = maxParallel;
+            this.sqlDir = sqlDir;
+            settingsSaves++;
         }
     }
 
@@ -251,5 +292,76 @@ class DataLinqControllerTest {
         assertEquals("jdbc:new", gw.url("a"));
         assertEquals("a", gw.defaultSource());
         assertTrue(c.dbStatus().contains("a"));
+    }
+
+    // ---- Settings ----
+
+    @Test
+    void openingSettingsSeedsFromGatewayAndSwitchesScreen() {
+        FakeGateway gw = new FakeGateway();
+        gw.language = "ko";
+        gw.batchSize = 500;
+        gw.sqlDir = "/data/sql";
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+        c.setSelected(0); // Settings is the first base entry
+        c.activate();
+        assertEquals(DataLinqController.Screen.SETTINGS, c.screen());
+        assertEquals("ko", c.setLanguage());
+        assertEquals("500", c.setBatchSize());
+        assertEquals("/data/sql", c.setSqlDir());
+    }
+
+    @Test
+    void settingsTogglesLanguageAndEditsTextRows() {
+        DataLinqController c = controller((op, dry, log) -> 0);
+        c.openSettings();
+        c.setSettingsRow(0); // language: en -> ko
+        c.settingsToggle();
+        assertEquals("ko", c.setLanguage());
+
+        c.setSettingsRow(3); // batch-size: digits only
+        c.settingsBackspace(); // clear seeded "1000"
+        c.settingsBackspace();
+        c.settingsBackspace();
+        c.settingsBackspace();
+        c.settingsType("x"); // ignored - not a digit
+        c.settingsType("2");
+        c.settingsType("5");
+        assertEquals("25", c.setBatchSize());
+
+        c.setSettingsRow(5); // sql-dir: any char
+        c.settingsType("/");
+        c.settingsType("a");
+        assertEquals("/a", c.setSqlDir());
+    }
+
+    @Test
+    void savingSettingsPersistsAndAppliesMaskLive() {
+        FakeGateway gw = new FakeGateway();
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+        c.openSettings();
+        c.setSettingsRow(2); // mask-password
+        c.settingsToggle();  // true -> false
+        c.saveSettings();
+        assertEquals(1, gw.settingsSaves);
+        assertFalse(gw.maskPassword);  // persisted
+        assertFalse(c.maskPassword()); // applied live
+    }
+
+    @Test
+    void changingSqlDirOnSaveRescans() {
+        FakeGateway gw = new FakeGateway();
+        AtomicInteger scans = new AtomicInteger();
+        DataLinqController c = new DataLinqController(MSG, true, 4,
+                () -> { scans.incrementAndGet(); return List.of(); },
+                (op, dry, log) -> 0, gw, gw, true);
+        c.init(); // first scan
+        c.openSettings();
+        c.setSettingsRow(5);
+        c.settingsType("/");
+        c.settingsType("n");
+        int before = scans.get();
+        c.saveSettings();
+        assertTrue(scans.get() > before); // sql-dir changed -> rescan
     }
 }
