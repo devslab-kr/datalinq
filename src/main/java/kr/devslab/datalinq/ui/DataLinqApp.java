@@ -8,15 +8,18 @@ import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.ui.DataLinqController.Entry;
 
 import dev.tamboui.layout.Constraint;
+import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Color;
 import dev.tamboui.style.Overflow;
 import dev.tamboui.toolkit.app.ToolkitApp;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.ListElement;
 import dev.tamboui.toolkit.event.EventResult;
+import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.bindings.Actions;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
+import dev.tamboui.tui.event.MouseEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,9 +33,10 @@ import static dev.tamboui.toolkit.Toolkit.stack;
 import static dev.tamboui.toolkit.Toolkit.text;
 
 /**
- * The View + key dispatch (tamboui MVC): {@link #render()} is a pure function of the
- * {@link DataLinqController} state. About and the destructive confirm render as centred
- * dialog popups overlaid (via {@code stack}) on the main UI.
+ * The View + input dispatch (tamboui MVC): {@link #render()} is a pure function of the
+ * {@link DataLinqController} state. Keyboard, number shortcuts (1-9), and mouse (wheel
+ * scroll + click to select/run) all dispatch to controller commands. About and the
+ * destructive confirm render as centred dialog popups overlaid (via {@code stack}).
  */
 public final class DataLinqApp extends ToolkitApp {
 
@@ -53,6 +57,11 @@ public final class DataLinqApp extends ToolkitApp {
     }
 
     @Override
+    protected TuiConfig configure() {
+        return TuiConfig.builder().mouseCapture(true).build();
+    }
+
+    @Override
     protected void onStart() {
         c.init();
         menu.selected(c.selected());
@@ -60,9 +69,10 @@ public final class DataLinqApp extends ToolkitApp {
 
     @Override
     protected Element render() {
+        List<Entry> entries = c.entries();
         List<String> labels = new ArrayList<>();
-        for (Entry e : c.entries()) {
-            labels.add(menuLabel(e));
+        for (int i = 0; i < entries.size(); i++) {
+            labels.add(menuLabel(i, entries.get(i)));
         }
 
         Element base = dock()
@@ -73,7 +83,8 @@ public final class DataLinqApp extends ToolkitApp {
                         .borderColor(Color.CYAN)
                         .id("menu")
                         .focusable()
-                        .onKeyEvent(this::onKey),
+                        .onKeyEvent(this::onKey)
+                        .onMouseEvent(this::onMouse),
                         Constraint.percentage(40))
                 .center(panel(outputContent())
                         .title("output")
@@ -147,12 +158,13 @@ public final class DataLinqApp extends ToolkitApp {
         return column(lines.toArray(new Element[0]));
     }
 
-    private String menuLabel(Entry e) {
+    private String menuLabel(int index, Entry e) {
+        String num = index < 9 ? (index + 1) + "  " : "   ";
         if (e.kind() == Entry.Kind.MIGRATION) {
             Operation op = e.operation();
-            return op.displayName() + "  [" + op.type() + "]" + (op.destructive() ? "  (!)" : "");
+            return num + op.displayName() + "  [" + op.type() + "]" + (op.destructive() ? "  (!)" : "");
         }
-        return "* " + e.label();
+        return num + e.label();
     }
 
     private EventResult onKey(KeyEvent e) {
@@ -173,10 +185,20 @@ public final class DataLinqApp extends ToolkitApp {
             default:
                 if (e.matches(Actions.SELECT)) {
                     c.setSelected(menu.selected());
-                    c.activate();
-                    if (c.quitRequested()) {
-                        quit();
+                    activateAndMaybeQuit(menu.selected());
+                    return EventResult.HANDLED;
+                }
+                for (int n = 1; n <= 9; n++) {
+                    if (isChar(e, Integer.toString(n))) {
+                        if (n - 1 < c.entries().size()) {
+                            menu.selected(n - 1);
+                            activateAndMaybeQuit(n - 1);
+                        }
+                        return EventResult.HANDLED;
                     }
+                }
+                if (isChar(e, "q") || isChar(e, "Q")) {
+                    quit();
                     return EventResult.HANDLED;
                 }
                 if (isChar(e, "d")) {
@@ -192,6 +214,28 @@ public final class DataLinqApp extends ToolkitApp {
                     return EventResult.HANDLED;
                 }
                 return EventResult.UNHANDLED; // let the list handle up/down
+        }
+    }
+
+    private EventResult onMouse(MouseEvent e) {
+        if (c.center() == DataLinqController.Center.OUTPUT && e.isPress() && e.isLeftButton()) {
+            Rect area = menu.renderedArea();
+            if (area != null && area.contains(e.x(), e.y())) {
+                int index = e.y() - area.top();
+                if (index >= 0 && index < c.entries().size()) {
+                    menu.selected(index);
+                    activateAndMaybeQuit(index);
+                    return EventResult.HANDLED;
+                }
+            }
+        }
+        return EventResult.UNHANDLED; // wheel scroll handled by the list
+    }
+
+    private void activateAndMaybeQuit(int index) {
+        c.activateIndex(index);
+        if (c.quitRequested()) {
+            quit();
         }
     }
 

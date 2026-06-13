@@ -183,6 +183,12 @@ public final class DataLinqController {
         }
     }
 
+    /** Select an entry by index and activate it (number shortcut / mouse click). */
+    public void activateIndex(int index) {
+        setSelected(index);
+        activate();
+    }
+
     public void confirmYes() {
         Entry e = pendingConfirm;
         pendingConfirm = null;
