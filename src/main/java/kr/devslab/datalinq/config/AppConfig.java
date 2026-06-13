@@ -52,18 +52,27 @@ public final class AppConfig {
         this.root = root;
     }
 
-    @SuppressWarnings("unchecked")
     public static AppConfig load(Path file) throws IOException {
+        return load(file, file);
+    }
+
+    /**
+     * Reads config from {@code readFrom} but remembers {@code saveTo} as the {@link #save()}
+     * target. On first run the packaged {@code application.example.yml} can seed the values
+     * while edits are written to the user's own {@code application.yml}.
+     */
+    @SuppressWarnings("unchecked")
+    public static AppConfig load(Path readFrom, Path saveTo) throws IOException {
         Map<String, Object> root = new LinkedHashMap<>();
-        if (Files.exists(file)) {
-            try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        if (Files.exists(readFrom)) {
+            try (Reader r = Files.newBufferedReader(readFrom, StandardCharsets.UTF_8)) {
                 Object loaded = new Yaml().load(r);
                 if (loaded instanceof Map<?, ?> m) {
                     root = (Map<String, Object>) m;
                 }
             }
         }
-        return new AppConfig(file, root);
+        return new AppConfig(saveTo, root);
     }
 
     // ---- datasources ----

@@ -65,3 +65,18 @@ application {
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
 }
+
+// Bundle the editable default resources into the distribution image (alongside bin/ and lib/)
+// so the launcher resolves them via Home (the install dir) and works when run from anywhere.
+// application.yml is intentionally NOT bundled - it is gitignored and holds credentials; the
+// app seeds from application.example.yml on first run and saves edits to application.yml.
+distributions {
+    named("main") {
+        contents {
+            from("i18n") { into("i18n") }
+            from("branding") { into("branding") }
+            from("sql") { into("sql") }
+            from("application.example.yml")
+        }
+    }
+}

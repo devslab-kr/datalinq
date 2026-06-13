@@ -13,6 +13,7 @@ import kr.devslab.datalinq.ui.DataLinqApp;
 import kr.devslab.datalinq.ui.DataLinqController;
 import kr.devslab.datalinq.ui.Logo;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -33,20 +34,21 @@ import java.util.Locale;
 public final class Main {
 
     public static void main(String[] args) throws Exception {
-        Path projectDir = Paths.get(System.getProperty("user.dir"));
-        Path configFile = projectDir.resolve("application.yml");
-        AppConfig config = AppConfig.load(configFile);
-        Path sqlRoot = resolveSqlRoot(projectDir, config);
+        Home home = Home.detect();
+        Path configFile = home.resolve("application.yml"); // save target (or default in the install dir)
+        Path readFrom = Files.exists(configFile) ? configFile : home.resolve("application.example.yml");
+        AppConfig config = AppConfig.load(readFrom, configFile);
+        Path sqlRoot = resolveSqlRoot(home, config);
 
         List<Operation> ops = new OperationScanner(sqlRoot).scan();
         String cmd = args.length > 0 ? args[0] : "tui";
 
         switch (cmd) {
-            case "tui" -> launchTui(projectDir, config, sqlRoot);
+            case "tui" -> launchTui(home, config, sqlRoot);
             case "list" -> printList(sqlRoot, ops);
             case "config" -> printConfig(config, sqlRoot);
-            case "i18n" -> printI18n(projectDir, config, args);
-            case "logo" -> Logo.load(projectDir.resolve("branding/logo.txt")).forEach(System.out::println);
+            case "i18n" -> printI18n(home, config, args);
+            case "logo" -> Logo.load(home.resolve("branding/logo.txt")).forEach(System.out::println);
             case "run" -> runOne(ops, config, args);
             default -> {
                 System.err.println("unknown command: " + cmd);
@@ -55,9 +57,9 @@ public final class Main {
         }
     }
 
-    private static Path resolveSqlRoot(Path projectDir, AppConfig config) {
+    private static Path resolveSqlRoot(Home home, AppConfig config) {
         String dir = config.sqlDir();
-        return dir.isBlank() ? projectDir.resolve("sql") : Paths.get(dir);
+        return dir.isBlank() ? home.resolve("sql") : Paths.get(dir);
     }
 
     private static void printList(Path sqlRoot, List<Operation> ops) {
@@ -92,9 +94,9 @@ public final class Main {
                 + ", dry-run-default=" + cfg.dryRunDefault() + ", language=" + cfg.language());
     }
 
-    private static void printI18n(Path projectDir, AppConfig config, String[] args) {
+    private static void printI18n(Home home, AppConfig config, String[] args) {
         String lang = args.length > 1 ? args[1] : config.language();
-        Messages m = Messages.load(projectDir.resolve("i18n"), lang);
+        Messages m = Messages.load(home.resolve("i18n"), lang);
         System.out.println("language: " + (lang.isBlank()
                 ? "(system: " + Locale.getDefault().getLanguage() + ")" : lang));
         for (String k : new String[]{"menu.settings", "menu.dbConnection", "menu.about",
@@ -116,9 +118,9 @@ public final class Main {
         System.out.println("done.");
     }
 
-    private static void launchTui(Path projectDir, AppConfig config, Path sqlRoot) throws Exception {
-        Messages msg = Messages.load(projectDir.resolve("i18n"), config.language());
-        List<String> logo = Logo.load(projectDir.resolve("branding/logo.txt"));
+    private static void launchTui(Home home, AppConfig config, Path sqlRoot) throws Exception {
+        Messages msg = Messages.load(home.resolve("i18n"), config.language());
+        List<String> logo = Logo.load(home.resolve("branding/logo.txt"));
         OperationScanner scanner = new OperationScanner(sqlRoot);
         MigrationEngine engine = new MigrationEngine(config);
         DataLinqController controller = new DataLinqController(
