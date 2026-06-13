@@ -7,6 +7,7 @@ package kr.devslab.datalinq;
 
 import kr.devslab.datalinq.config.AppConfig;
 import kr.devslab.datalinq.i18n.Messages;
+import kr.devslab.datalinq.ui.Logo;
 import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.core.OperationScanner;
 import kr.devslab.datalinq.engine.MigrationEngine;
@@ -39,6 +40,7 @@ public final class Main {
             case "list" -> printList(sqlRoot, ops);
             case "config" -> printConfig(configFile);
             case "i18n" -> printI18n(projectDir, configFile, args);
+            case "logo" -> Logo.load(projectDir.resolve("branding/logo.txt")).forEach(System.out::println);
             case "run" -> runOne(ops, configFile, args);
             default -> {
                 System.err.println("unknown command: " + cmd);
