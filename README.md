@@ -1,5 +1,7 @@
 # DataLinq
 
+**English** | [한국어](README.ko.md)
+
 A TUI-driven data migration tool (built with [TamboUI](https://github.com/tamboui/tamboui)).
 The **base menus are fixed in code**; the **migration menus are discovered by scanning the
 `sql/` folder** - drop a folder, get a menu.
