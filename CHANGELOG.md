@@ -8,8 +8,9 @@ and the project aims to adhere to [Semantic Versioning](https://semver.org/spec/
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-14
+
 First functional cut: a cross-vendor JDBC data-migration tool with a TamboUI front-end.
-Nothing is released to a registry yet; the version is `0.1.0-SNAPSHOT`.
 
 ### Added
 
