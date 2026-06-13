@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 devslab
+ * Copyright 2026 DevsLab Co., Ltd.
  * SPDX-License-Identifier: Apache-2.0
  */
 

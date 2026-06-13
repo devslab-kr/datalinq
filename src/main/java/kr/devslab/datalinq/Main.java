@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 devslab
+ * Copyright 2026 DevsLab Co., Ltd.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -54,6 +54,9 @@ public final class Main {
             Operation o = ops.get(i);
             System.out.printf("  [%d] %-28s type=%-7s %s%n",
                     i, o.displayName(), o.type(), o.destructive() ? "(!)" : "");
+            if (o.destructive() && !o.confirmText().isEmpty()) {
+                System.out.println("        confirm: " + o.confirmText());
+            }
         }
         System.out.println();
         System.out.println("run:  ... run <index> [--execute]   (default = dry-run)");

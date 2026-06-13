@@ -19,6 +19,10 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+}
+
 dependencies {
     // TUI front-end (engine itself uses none of this)
     implementation("dev.tamboui:tamboui-toolkit:0.4.0-SNAPSHOT")
@@ -34,6 +38,8 @@ dependencies {
 
 application {
     mainClass = "kr.devslab.datalinq.Main"
+    // Korean content + Windows console: force UTF-8 stdout/stderr
+    applicationDefaultJvmArgs = listOf("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
 
 // The TUI reads from the real terminal; let `gradle run` pass stdin through.

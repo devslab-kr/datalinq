@@ -6,7 +6,7 @@ The **base menus are fixed in code**; the **migration menus are discovered by sc
 
 Source = **MS SQL Server**, Target = **MariaDB** (cross-vendor, two connections).
 
-> A devslab asset. Licensed under Apache-2.0.
+> By **DevsLab Co., Ltd.** (주식회사 데브스랩) · https://devslab.kr · Apache-2.0
 
 ## Add a migration = drop a folder
 

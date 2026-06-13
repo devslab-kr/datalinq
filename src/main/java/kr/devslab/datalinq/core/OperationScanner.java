@@ -1,12 +1,13 @@
 /*
- * Copyright 2026 devslab
+ * Copyright 2026 DevsLab Co., Ltd.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package kr.devslab.datalinq.core;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -103,7 +104,7 @@ public final class OperationScanner {
         Properties p = new Properties();
         Path meta = dir.resolve("operation.properties");
         if (Files.exists(meta)) {
-            try (InputStream in = Files.newInputStream(meta)) {
+            try (Reader in = Files.newBufferedReader(meta, StandardCharsets.UTF_8)) {
                 p.load(in);
             } catch (IOException ignored) {
                 // treat as no metadata
