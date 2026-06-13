@@ -14,7 +14,7 @@ Source = **MS SQL Server**, Target = **MariaDB** (cross-vendor, two connections)
 sql/
 ├── 01_Approval_Lines/       # ETL: source.sql (aliased SELECT) -> target table
 │   ├── source.sql
-│   └── operation.properties     ->  type=etl, target=approval_lines
+│   └── operation.properties     ->  type=etl, table=approval_lines
 ├── 03_Reset_Base_Data/      # SCRIPT: run .sql on the TARGET (reset/delete)
 │   ├── 01_reset.sql
 │   └── operation.properties     ->  type=script, destructive=true
@@ -30,7 +30,7 @@ sql/
 
 | type | folder shape | what it does | code? |
 |------|--------------|--------------|-------|
-| **etl** | `source.sql` + `target=<table>` | read source, auto-INSERT into target. The SELECT's **column aliases = target columns**, so no INSERT is written. | none |
+| **etl** | `source.sql` + `table=<table>` | read source, auto-INSERT into target. The SELECT's **column aliases = target columns**, so no INSERT is written. | none |
 | **script** | one or more `.sql` | run them against the **target** (resets, deletes). | none |
 | **handler** | `source.sql` + `handler=<name>` | a `MigrationHandler` (transforms / master-detail / generated-key FKs), discovered by ServiceLoader. | ~20 lines |
 
@@ -54,17 +54,26 @@ so a GraalVM native image stays possible.
 
 ## Configuration (`application.yml`)
 
+Multiple **named datasources** - any can be a source or a target. Operations pick by name,
+falling back to `defaults`:
+
 ```yaml
-datasource:
-  source: { url: jdbc:sqlserver://..., username: sa,   password: "" }
-  target: { url: jdbc:mariadb://...,   username: root, password: "" }
+datasources:
+  legacy-erp: { url: jdbc:sqlserver://..., username: sa,   password: "" }
+  new-core:   { url: jdbc:mariadb://...,   username: root, password: "" }
+defaults:
+  source: legacy-erp
+  target: new-core
 options:
   batch-size: 1000
   dry-run-default: true
+  language: en              # en | ko  (blank = system locale)
+  # sql-dir: /path/to/sql   # external migration folder (blank = ./sql)
 ```
 
-Copy `application.example.yml` -> `application.yml` (gitignored). It can also be edited from
-inside the app (DB Connection screen) and saved.
+An operation can override per run with `source=<name>` / `target=<name>` in its
+operation.properties. Copy `application.example.yml` -> `application.yml` (gitignored); it can
+also be edited from inside the app (DB Connection screen) and saved.
 
 ## Safety
 

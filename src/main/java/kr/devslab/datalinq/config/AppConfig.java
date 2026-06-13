@@ -2,7 +2,6 @@
  * Copyright 2026 DevsLab Co., Ltd.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 package kr.devslab.datalinq.config;
 
 import org.yaml.snakeyaml.DumperOptions;
@@ -17,22 +16,31 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Loads / edits / saves {@code application.yml}: datasource (source = MS SQL, target = MariaDB)
- * plus options. Backed by a plain nested {@code Map} (no POJO binding) so it stays GraalVM
- * native-image friendly. The DB Connection screen mutates fields and calls {@link #save()}.
+ * Loads / edits / saves {@code application.yml}. Supports MULTIPLE named datasources - any of
+ * which can act as a source or a target. An operation picks its source/target datasource by
+ * name, falling back to {@code defaults.source} / {@code defaults.target}.
  *
  * <pre>
- * datasource:
- *   source: { url, username, password }
- *   target: { url, username, password }
+ * datasources:
+ *   legacy-erp: { url: jdbc:sqlserver://..., username: sa,   password: "" }
+ *   new-core:   { url: jdbc:mariadb://...,   username: root, password: "" }
+ * defaults:
+ *   source: legacy-erp
+ *   target: new-core
  * options:
  *   batch-size: 1000
  *   dry-run-default: true
+ *   language: en
  * </pre>
+ *
+ * Backed by a plain nested {@code Map} (no POJO binding) so it stays GraalVM native-image
+ * friendly. The DB Connection screen mutates datasources and calls {@link #save()}.
  */
 public final class AppConfig {
 
@@ -58,22 +66,46 @@ public final class AppConfig {
         return new AppConfig(file, root);
     }
 
-    // ---- datasource accessors ----
+    // ---- datasources ----
 
-    public String sourceUrl()      { return str("datasource", "source", "url"); }
-    public String sourceUsername() { return str("datasource", "source", "username"); }
-    public String sourcePassword() { return str("datasource", "source", "password"); }
-    public String targetUrl()      { return str("datasource", "target", "url"); }
-    public String targetUsername() { return str("datasource", "target", "username"); }
-    public String targetPassword() { return str("datasource", "target", "password"); }
-
-    public void setSource(String url, String username, String password) {
-        setDatasource("source", url, username, password);
+    public List<String> datasourceNames() {
+        Object v = root.get("datasources");
+        List<String> names = new ArrayList<>();
+        if (v instanceof Map<?, ?> m) {
+            for (Object k : m.keySet()) {
+                names.add(k.toString());
+            }
+        }
+        return names;
     }
 
-    public void setTarget(String url, String username, String password) {
-        setDatasource("target", url, username, password);
+    public String url(String datasource)      { return field(datasource, "url"); }
+    public String username(String datasource) { return field(datasource, "username"); }
+    public String password(String datasource) { return field(datasource, "password"); }
+
+    public void setDatasource(String name, String url, String username, String password) {
+        Map<String, Object> all = child(root, "datasources");
+        Map<String, Object> ds = child(all, name);
+        ds.put("url", url);
+        ds.put("username", username);
+        ds.put("password", password);
     }
+
+    @SuppressWarnings("unchecked")
+    public void removeDatasource(String name) {
+        Object v = root.get("datasources");
+        if (v instanceof Map<?, ?> m) {
+            ((Map<String, Object>) m).remove(name);
+        }
+    }
+
+    // ---- defaults ----
+
+    public String defaultSource() { return str("defaults", "source"); }
+    public String defaultTarget() { return str("defaults", "target"); }
+
+    public void setDefaultSource(String name) { child(root, "defaults").put("source", name); }
+    public void setDefaultTarget(String name) { child(root, "defaults").put("target", name); }
 
     // ---- options ----
 
@@ -87,22 +119,31 @@ public final class AppConfig {
         return !(v instanceof Boolean b) || b; // default true
     }
 
-    /** UI language code (e.g. "ko"); blank = system default. */
     public String language() {
         Object v = path("options", "language");
         return v == null ? "" : v.toString().trim();
     }
 
-    // ---- connections ----
-
-    public Connection openSource() throws SQLException {
-        return DriverManager.getConnection(require(sourceUrl(), "datasource.source.url"),
-                sourceUsername(), sourcePassword());
+    /** Directory holding migration folders ({@code options.sql-dir}); blank -> "./sql". */
+    public String sqlDir() {
+        Object v = path("options", "sql-dir");
+        return v == null ? "" : v.toString().trim();
     }
 
-    public Connection openTarget() throws SQLException {
-        return DriverManager.getConnection(require(targetUrl(), "datasource.target.url"),
-                targetUsername(), targetPassword());
+    public void setSqlDir(String dir) {
+        child(root, "options").put("sql-dir", dir);
+    }
+
+    // ---- connections ----
+
+    /** Opens a connection to the named datasource. */
+    public Connection connection(String datasource) throws SQLException {
+        String url = url(datasource);
+        if (url == null || url.isBlank()) {
+            throw new IllegalStateException("datasource '" + datasource
+                    + "' is not defined (or has no url) in application.yml");
+        }
+        return DriverManager.getConnection(url, username(datasource), password(datasource));
     }
 
     // ---- persistence ----
@@ -124,6 +165,19 @@ public final class AppConfig {
     }
 
     // ---- helpers ----
+
+    @SuppressWarnings("unchecked")
+    private String field(String datasource, String key) {
+        Object all = root.get("datasources");
+        if (all instanceof Map<?, ?> m) {
+            Object ds = ((Map<String, Object>) m).get(datasource);
+            if (ds instanceof Map<?, ?> dm) {
+                Object v = ((Map<String, Object>) dm).get(key);
+                return v == null ? "" : v.toString();
+            }
+        }
+        return "";
+    }
 
     @SuppressWarnings("unchecked")
     private Object path(String... keys) {
@@ -152,20 +206,5 @@ public final class AppConfig {
         Map<String, Object> created = new LinkedHashMap<>();
         m.put(key, created);
         return created;
-    }
-
-    private void setDatasource(String role, String url, String username, String password) {
-        Map<String, Object> ds = child(root, "datasource");
-        Map<String, Object> r = child(ds, role);
-        r.put("url", url);
-        r.put("username", username);
-        r.put("password", password);
-    }
-
-    private static String require(String value, String key) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("missing config: " + key + " (set it in application.yml)");
-        }
-        return value;
     }
 }

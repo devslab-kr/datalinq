@@ -2,7 +2,6 @@
  * Copyright 2026 DevsLab Co., Ltd.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 package kr.devslab.datalinq.core;
 
 import java.io.IOException;
@@ -19,11 +18,11 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Scans the {@code sql/} root and turns each subfolder into an {@link Operation}.
+ * Scans an {@code sql/} root and turns each subfolder into an {@link Operation}.
  * <p>
  * Convention: folder {@code NN_Some_Name} -> order {@code NN}, label {@code "Some Name"}.
  * Type is inferred (see {@link #inferType}); an optional {@code operation.properties}
- * file can override description / target / handler / destructive / confirm.
+ * file can override description / source / target / table / handler / destructive / confirm.
  */
 public final class OperationScanner {
 
@@ -33,6 +32,10 @@ public final class OperationScanner {
 
     public OperationScanner(Path root) {
         this.root = root;
+    }
+
+    public Path root() {
+        return root;
     }
 
     public List<Operation> scan() throws IOException {
@@ -57,7 +60,9 @@ public final class OperationScanner {
         Properties meta = loadMeta(dir);
 
         String description = meta.getProperty("description", "").trim();
-        String targetTable = meta.getProperty("target", "").trim();
+        String sourceDb = meta.getProperty("source", "").trim();      // datasource name
+        String targetDb = meta.getProperty("target", "").trim();      // datasource name
+        String targetTable = meta.getProperty("table", "").trim();    // ETL target table
         String handlerName = meta.getProperty("handler", "").trim();
         boolean destructive = Boolean.parseBoolean(meta.getProperty("destructive", "false").trim());
         String confirmText = meta.getProperty("confirm", "").trim();
@@ -66,7 +71,7 @@ public final class OperationScanner {
         OperationType type = inferType(typeHint, handlerName, sqlFiles);
 
         return new Operation(order, folder, displayName, description, type, dir, sqlFiles,
-                targetTable, handlerName, destructive, confirmText);
+                sourceDb, targetDb, targetTable, handlerName, destructive, confirmText);
     }
 
     private static OperationType inferType(String hint, String handlerName, List<Path> sqlFiles) {
