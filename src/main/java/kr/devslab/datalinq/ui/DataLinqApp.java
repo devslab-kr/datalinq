@@ -22,15 +22,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static dev.tamboui.toolkit.Toolkit.column;
+import static dev.tamboui.toolkit.Toolkit.dialog;
 import static dev.tamboui.toolkit.Toolkit.dock;
 import static dev.tamboui.toolkit.Toolkit.list;
 import static dev.tamboui.toolkit.Toolkit.panel;
+import static dev.tamboui.toolkit.Toolkit.stack;
 import static dev.tamboui.toolkit.Toolkit.text;
 
 /**
  * The View + key dispatch (tamboui MVC): {@link #render()} is a pure function of the
- * {@link DataLinqController} state, and key events are dispatched to controller commands.
- * All behaviour lives in the controller (which is unit-tested); this class is just wiring.
+ * {@link DataLinqController} state. About and the destructive confirm render as centred
+ * dialog popups overlaid (via {@code stack}) on the main UI.
  */
 public final class DataLinqApp extends ToolkitApp {
 
@@ -63,7 +65,7 @@ public final class DataLinqApp extends ToolkitApp {
             labels.add(menuLabel(e));
         }
 
-        return dock()
+        Element base = dock()
                 .top(header())
                 .left(panel(menu.items(labels))
                         .title(c.msg().get("menu.migrations"))
@@ -73,10 +75,19 @@ public final class DataLinqApp extends ToolkitApp {
                         .focusable()
                         .onKeyEvent(this::onKey),
                         Constraint.percentage(40))
-                .center(centerPanel())
+                .center(panel(outputContent())
+                        .title("output")
+                        .rounded()
+                        .borderColor(Color.DARK_GRAY))
                 .bottom(panel(text(" " + c.msg().get("footer.keys") + " ").dim())
                         .rounded()
                         .borderColor(Color.DARK_GRAY));
+
+        return switch (c.center()) {
+            case ABOUT -> stack(base, aboutDialog());
+            case CONFIRM -> stack(base, confirmDialog());
+            case OUTPUT -> base;
+        };
     }
 
     private Element header() {
@@ -91,15 +102,11 @@ public final class DataLinqApp extends ToolkitApp {
                 .borderColor(Color.CYAN);
     }
 
-    private Element centerPanel() {
-        return switch (c.center()) {
-            case ABOUT -> panel(aboutContent())
-                    .title(c.msg().get("menu.about")).rounded().borderColor(Color.DARK_GRAY);
-            case CONFIRM -> panel(confirmContent())
-                    .title(c.msg().get("confirm.title")).rounded().borderColor(Color.RED);
-            case OUTPUT -> panel(outputContent())
-                    .title("output").rounded().borderColor(Color.DARK_GRAY);
-        };
+    private Element aboutDialog() {
+        return dialog(c.msg().get("menu.about"), aboutContent())
+                .rounded()
+                .borderColor(Color.CYAN)
+                .width(64);
     }
 
     private Element aboutContent() {
@@ -110,18 +117,21 @@ public final class DataLinqApp extends ToolkitApp {
         return column(lines.toArray(new Element[0]));
     }
 
-    private Element confirmContent() {
+    private Element confirmDialog() {
         Entry e = c.pendingConfirm();
         String label = e != null ? e.label() : "";
         String confirm = (e != null && !e.operation().confirmText().isEmpty())
                 ? e.operation().confirmText()
                 : c.msg().get("confirm.destructiveDefault");
-        return column(
+        return dialog(c.msg().get("confirm.title"),
                 text("!  " + label).red().bold(),
                 text(""),
                 text(confirm).overflow(Overflow.WRAP_WORD),
                 text(""),
-                text(c.msg().get("confirm.prompt")).yellow());
+                text(c.msg().get("confirm.prompt")).yellow())
+                .rounded()
+                .borderColor(Color.RED)
+                .width(56);
     }
 
     private Element outputContent() {
@@ -164,6 +174,9 @@ public final class DataLinqApp extends ToolkitApp {
                 if (e.matches(Actions.SELECT)) {
                     c.setSelected(menu.selected());
                     c.activate();
+                    if (c.quitRequested()) {
+                        quit();
+                    }
                     return EventResult.HANDLED;
                 }
                 if (isChar(e, "d")) {

@@ -26,7 +26,7 @@ public final class DataLinqController {
 
     /** A menu entry: a fixed base action, or a discovered migration. */
     public record Entry(Kind kind, String label, Operation operation) {
-        public enum Kind { SETTINGS, DB_CONNECTION, ABOUT, MIGRATION }
+        public enum Kind { SETTINGS, DB_CONNECTION, ABOUT, QUIT, MIGRATION }
     }
 
     /** Supplies the migration operations (prod: scan the sql folder; test: a fixed list). */
@@ -53,6 +53,7 @@ public final class DataLinqController {
     private Center center = Center.OUTPUT;
     private Entry pendingConfirm;
     private volatile boolean running;
+    private boolean quitRequested;
 
     public DataLinqController(Messages msg, boolean dryRunDefault, int maxParallel,
                               OperationProvider provider, Runner runner) {
@@ -101,6 +102,11 @@ public final class DataLinqController {
         return running;
     }
 
+    /** Set when the user activates the Quit entry; the View calls quit() and clears the UI. */
+    public boolean quitRequested() {
+        return quitRequested;
+    }
+
     public List<String> output() {
         synchronized (output) {
             return List.copyOf(output);
@@ -136,6 +142,7 @@ public final class DataLinqController {
         entries.add(new Entry(Entry.Kind.SETTINGS, msg.get("menu.settings"), null));
         entries.add(new Entry(Entry.Kind.DB_CONNECTION, msg.get("menu.dbConnection"), null));
         entries.add(new Entry(Entry.Kind.ABOUT, msg.get("menu.about"), null));
+        entries.add(new Entry(Entry.Kind.QUIT, msg.get("menu.quit"), null));
         try {
             for (Operation op : provider.scan()) {
                 entries.add(new Entry(Entry.Kind.MIGRATION, op.displayName(), op));
@@ -159,6 +166,7 @@ public final class DataLinqController {
         }
         switch (e.kind()) {
             case ABOUT -> center = Center.ABOUT;
+            case QUIT -> quitRequested = true;
             case SETTINGS, DB_CONNECTION -> {
                 center = Center.OUTPUT;
                 log("(" + e.label() + " - coming soon)");

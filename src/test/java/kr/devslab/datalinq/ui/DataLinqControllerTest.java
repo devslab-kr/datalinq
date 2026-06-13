@@ -42,11 +42,21 @@ class DataLinqControllerTest {
     void rescanBuildsBaseMenuPlusMigrations() {
         DataLinqController c = controller((op, dry, log) -> 0, migration("M1", false), migration("M2", false));
         List<Entry> e = c.entries();
-        assertEquals(5, e.size()); // 3 base + 2 migrations
+        assertEquals(6, e.size()); // 4 base + 2 migrations
         assertEquals(Entry.Kind.SETTINGS, e.get(0).kind());
         assertEquals(Entry.Kind.DB_CONNECTION, e.get(1).kind());
         assertEquals(Entry.Kind.ABOUT, e.get(2).kind());
-        assertEquals(Entry.Kind.MIGRATION, e.get(3).kind());
+        assertEquals(Entry.Kind.QUIT, e.get(3).kind());
+        assertEquals(Entry.Kind.MIGRATION, e.get(4).kind());
+    }
+
+    @Test
+    void quitEntryRequestsQuit() {
+        DataLinqController c = controller((op, dry, log) -> 0);
+        c.setSelected(3); // Quit
+        assertFalse(c.quitRequested());
+        c.activate();
+        assertTrue(c.quitRequested());
     }
 
     @Test
@@ -66,7 +76,7 @@ class DataLinqControllerTest {
                 migration("Reset", true));
         c.toggleDryRun(); // true -> false (execute)
         assertFalse(c.dryRun());
-        c.setSelected(3); // the destructive migration
+        c.setSelected(4); // the destructive migration
         c.activate();
         assertEquals(Center.CONFIRM, c.center());
         assertNotNull(c.pendingConfirm());
@@ -83,7 +93,7 @@ class DataLinqControllerTest {
         DataLinqController c = controller((op, dry, log) -> { runs.incrementAndGet(); return 0; },
                 migration("Reset", true));
         c.toggleDryRun();
-        c.setSelected(3);
+        c.setSelected(4);
         c.activate();
         c.confirmNo();
         assertEquals(0, runs.get());
@@ -95,7 +105,7 @@ class DataLinqControllerTest {
         AtomicInteger runs = new AtomicInteger();
         DataLinqController c = controller((op, dry, log) -> { runs.incrementAndGet(); return 0; },
                 migration("M1", false));
-        c.setSelected(3);
+        c.setSelected(4);
         c.activate();
         assertEquals(1, runs.get());
         assertNotEquals(Center.CONFIRM, c.center());
@@ -105,7 +115,7 @@ class DataLinqControllerTest {
     void runFailureIsLoggedAndDoesNotThrow() {
         DataLinqController c = controller((op, dry, log) -> { throw new RuntimeException("db down"); },
                 migration("M1", false));
-        c.setSelected(3);
+        c.setSelected(4);
         c.activate();
         assertTrue(c.output().stream().anyMatch(l -> l.contains("db down")));
         assertFalse(c.running());
