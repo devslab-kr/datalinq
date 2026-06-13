@@ -45,10 +45,11 @@ public final class DataLinqApp extends ToolkitApp {
     private final List<String> about;
     private final ListElement<?> menu;
 
-    // DB Connection screen view state: a unified ↑↓ cursor over [datasource rows..., url, user,
-    // pass]; the three edit buffers; and the last screen, to reseed buffers on entry.
+    // DB Connection screen view state: two panes (datasource list / edit fields) switched with
+    // Left/Right; Up/Down moves within the active pane. dbBuf holds the three edit buffers.
     private final String[] dbBuf = {"", "", ""};
-    private int dbCursor;
+    private boolean dbFieldsPane; // false = datasource list active, true = edit fields active
+    private int dbField;          // 0 = url, 1 = user, 2 = password (when in the fields pane)
     private DataLinqController.Screen lastScreen = DataLinqController.Screen.MAIN;
 
     public DataLinqApp(DataLinqController controller, List<String> logo, List<String> about) {
@@ -264,7 +265,8 @@ public final class DataLinqApp extends ToolkitApp {
     // ---- DB Connection screen ----
 
     private void enterDbScreen() {
-        dbCursor = c.dsIndex();
+        dbFieldsPane = false;
+        dbField = 0;
         reseedDbFields();
     }
 
@@ -282,7 +284,6 @@ public final class DataLinqApp extends ToolkitApp {
             center = panel(column(text(c.msg().get("db.noDatasources")).yellow()))
                     .title(c.msg().get("db.title")).rounded().borderColor(Color.CYAN);
         } else {
-            boolean cursorOnDs = dbCursor < names.size();
             List<Element> dsLines = new ArrayList<>();
             for (int i = 0; i < names.size(); i++) {
                 String n = names.get(i);
@@ -293,17 +294,18 @@ public final class DataLinqApp extends ToolkitApp {
             }
             Element dsPanel = panel(column(dsLines.toArray(new Element[0])))
                     .title(c.msg().get("menu.dbConnection")).rounded()
-                    .borderColor(cursorOnDs ? Color.CYAN : Color.DARK_GRAY);
+                    .borderColor(dbFieldsPane ? Color.DARK_GRAY : Color.CYAN);
 
-            int field = cursorOnDs ? -1 : dbCursor - names.size();
+            String[] labels = {c.msg().get("field.url"), c.msg().get("field.user"), c.msg().get("field.password")};
+            int labelWidth = Math.max(TextWidth.of(labels[0]), Math.max(TextWidth.of(labels[1]), TextWidth.of(labels[2])));
             Element form = panel(column(
-                    fieldRow(c.msg().get("field.url"), dbBuf[0], field == 0),
-                    fieldRow(c.msg().get("field.user"), dbBuf[1], field == 1),
-                    fieldRow(c.msg().get("field.password"), dbBuf[2], field == 2),
+                    fieldRow(labels[0], labelWidth, dbBuf[0], dbFieldsPane && dbField == 0),
+                    fieldRow(labels[1], labelWidth, dbBuf[1], dbFieldsPane && dbField == 1),
+                    fieldRow(labels[2], labelWidth, dbBuf[2], dbFieldsPane && dbField == 2),
                     text(""),
                     text(c.dbStatus()).yellow()))
                     .title(c.selectedDatasource()).rounded()
-                    .borderColor(cursorOnDs ? Color.DARK_GRAY : Color.CYAN);
+                    .borderColor(dbFieldsPane ? Color.CYAN : Color.DARK_GRAY);
 
             center = dock().left(dsPanel, Constraint.percentage(35)).center(form);
         }
@@ -319,60 +321,74 @@ public final class DataLinqApp extends ToolkitApp {
                 .onKeyEvent(this::onDbKey);
     }
 
-    private Element fieldRow(String label, String value, boolean active) {
-        String s = (active ? "> " : "  ") + padRight(label, 9) + " : " + value + (active ? "█" : "");
+    private Element fieldRow(String label, int labelWidth, String value, boolean active) {
+        String s = (active ? "> " : "  ") + TextWidth.pad(label, labelWidth) + " : " + value + (active ? "█" : "");
         var e = text(s);
         return active ? e.yellow().bold() : e.white();
     }
 
     private EventResult onDbKey(KeyEvent e) {
-        if (e.matches(Actions.CANCEL)) { // Esc
+        if (e.matches(Actions.CANCEL)) { // Esc -> leave the screen
             c.back();
             return EventResult.HANDLED;
         }
-        List<String> names = c.datasourceNames();
-        if (names.isEmpty()) {
+        if (c.datasourceNames().isEmpty()) {
             return EventResult.HANDLED; // nothing to edit; only Esc leaves
-        }
-        if (e.code() == KeyCode.UP) {
-            moveDbCursor(dbCursor - 1, names);
-            return EventResult.HANDLED;
-        }
-        if (e.code() == KeyCode.DOWN) {
-            moveDbCursor(dbCursor + 1, names);
-            return EventResult.HANDLED;
         }
         if (e.code() == KeyCode.F5) {
             doDbTest();
             return EventResult.HANDLED;
         }
-        if (e.matches(Actions.SELECT)) { // Enter
+        if (e.matches(Actions.SELECT)) { // Enter -> save
             doDbSave();
             return EventResult.HANDLED;
         }
-        if (dbCursor >= names.size()) { // editing a field
-            int field = dbCursor - names.size();
-            if (e.code() == KeyCode.BACKSPACE) {
-                if (!dbBuf[field].isEmpty()) {
-                    dbBuf[field] = dbBuf[field].substring(0, dbBuf[field].length() - 1);
-                }
-                return EventResult.HANDLED;
-            }
-            if (e.code() == KeyCode.CHAR && e.string() != null) {
-                dbBuf[field] += e.string();
-                return EventResult.HANDLED;
-            }
+        return dbFieldsPane ? onFieldsPaneKey(e) : onDatasourcePaneKey(e);
+    }
+
+    private EventResult onDatasourcePaneKey(KeyEvent e) {
+        if (e.code() == KeyCode.UP) {
+            c.moveDsUp();
+            reseedDbFields();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.DOWN) {
+            c.moveDsDown();
+            reseedDbFields();
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.RIGHT) { // cross into the edit fields
+            dbFieldsPane = true;
+            dbField = 0;
+            return EventResult.HANDLED;
         }
         return EventResult.UNHANDLED;
     }
 
-    private void moveDbCursor(int target, List<String> names) {
-        int max = names.size() + 2; // last field row (password)
-        dbCursor = Math.max(0, Math.min(max, target));
-        if (dbCursor < names.size() && dbCursor != c.dsIndex()) {
-            c.setDsIndex(dbCursor);
-            reseedDbFields();
+    private EventResult onFieldsPaneKey(KeyEvent e) {
+        if (e.code() == KeyCode.LEFT) { // back to the datasource list
+            dbFieldsPane = false;
+            return EventResult.HANDLED;
         }
+        if (e.code() == KeyCode.UP) {
+            dbField = Math.max(0, dbField - 1);
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.DOWN) {
+            dbField = Math.min(2, dbField + 1);
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.BACKSPACE) {
+            if (!dbBuf[dbField].isEmpty()) {
+                dbBuf[dbField] = dbBuf[dbField].substring(0, dbBuf[dbField].length() - 1);
+            }
+            return EventResult.HANDLED;
+        }
+        if (e.code() == KeyCode.CHAR && e.string() != null) {
+            dbBuf[dbField] += e.string();
+            return EventResult.HANDLED;
+        }
+        return EventResult.UNHANDLED;
     }
 
     private void doDbTest() {
@@ -396,14 +412,6 @@ public final class DataLinqApp extends ToolkitApp {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
-    }
-
-    private static String padRight(String s, int n) {
-        StringBuilder b = new StringBuilder(s);
-        while (b.length() < n) {
-            b.append(' ');
-        }
-        return b.toString();
     }
 
     private static boolean isChar(KeyEvent e, String s) {
