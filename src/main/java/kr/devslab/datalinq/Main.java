@@ -9,6 +9,8 @@ import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.core.OperationScanner;
 import kr.devslab.datalinq.engine.MigrationEngine;
 import kr.devslab.datalinq.i18n.Messages;
+import kr.devslab.datalinq.ui.DataLinqApp;
+import kr.devslab.datalinq.ui.DataLinqController;
 import kr.devslab.datalinq.ui.Logo;
 
 import java.nio.file.Path;
@@ -37,9 +39,10 @@ public final class Main {
         Path sqlRoot = resolveSqlRoot(projectDir, config);
 
         List<Operation> ops = new OperationScanner(sqlRoot).scan();
-        String cmd = args.length > 0 ? args[0] : "list";
+        String cmd = args.length > 0 ? args[0] : "tui";
 
         switch (cmd) {
+            case "tui" -> launchTui(projectDir, config, sqlRoot);
             case "list" -> printList(sqlRoot, ops);
             case "config" -> printConfig(config, sqlRoot);
             case "i18n" -> printI18n(projectDir, config, args);
@@ -111,6 +114,31 @@ public final class Main {
         System.out.println("> " + op.displayName() + (dryRun ? "  [dry-run]" : "  [EXECUTE]"));
         new MigrationEngine(config).run(op, dryRun, line -> System.out.println("    " + line));
         System.out.println("done.");
+    }
+
+    private static void launchTui(Path projectDir, AppConfig config, Path sqlRoot) throws Exception {
+        Messages msg = Messages.load(projectDir.resolve("i18n"), config.language());
+        List<String> logo = Logo.load(projectDir.resolve("branding/logo.txt"));
+        OperationScanner scanner = new OperationScanner(sqlRoot);
+        MigrationEngine engine = new MigrationEngine(config);
+        DataLinqController controller = new DataLinqController(
+                msg, config.dryRunDefault(), config.maxParallel(),
+                scanner::scan,
+                engine::run);
+        new DataLinqApp(controller, logo, aboutLines(msg)).run();
+    }
+
+    private static List<String> aboutLines(Messages msg) {
+        return List.of(
+                "DataLinq  v0.1.0",
+                msg.get("app.subtitle") + "  ·  MS SQL Server -> MariaDB",
+                "",
+                "Built with TamboUI",
+                "https://github.com/tamboui/tamboui",
+                "",
+                "© 2026 DevsLab Co., Ltd. · 주식회사 데브스랩",
+                "https://devslab.kr · support@devslab.kr",
+                "Apache-2.0");
     }
 
     private static String mask(String s) {
