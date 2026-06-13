@@ -20,4 +20,5 @@ options:
   batch-size: 1000
   dry-run-default: true
   language: en                # en | ko  (blank = system locale)
+  max-parallel: 4             # max operations run concurrently (virtual threads; bounds DB connections)
   # sql-dir: /path/to/sql     # external migration folder (blank = ./sql)

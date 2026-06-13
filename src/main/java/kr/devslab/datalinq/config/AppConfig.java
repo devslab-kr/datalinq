@@ -134,6 +134,12 @@ public final class AppConfig {
         child(root, "options").put("sql-dir", dir);
     }
 
+    /** Max operations run concurrently ({@code options.max-parallel}); bounds DB connections. */
+    public int maxParallel() {
+        Object v = path("options", "max-parallel");
+        return v instanceof Number n ? n.intValue() : 4;
+    }
+
     // ---- connections ----
 
     /** Opens a connection to the named datasource. */

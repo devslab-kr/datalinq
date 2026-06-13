@@ -14,15 +14,6 @@ repositories {
     }
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    options.encoding = "UTF-8"
-}
-
 dependencies {
     // TUI front-end (engine itself uses none of this)
     implementation("dev.tamboui:tamboui-toolkit:0.4.0-SNAPSHOT")
@@ -34,6 +25,20 @@ dependencies {
     // JDBC drivers: source = MS SQL Server, target = MariaDB
     implementation("com.microsoft.sqlserver:mssql-jdbc:12.8.1.jre11")
     implementation("org.mariadb.jdbc:mariadb-java-client:3.5.2")
+
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Java 25 (best virtual-thread + JDBC behaviour; no synchronized pinning).
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+    options.release.set(25)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 application {
