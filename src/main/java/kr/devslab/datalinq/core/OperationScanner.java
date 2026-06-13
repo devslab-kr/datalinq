@@ -1,12 +1,12 @@
 /*
- * Copyright 2026 devslab
+ * Copyright 2026 DevsLab Co., Ltd.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 package kr.devslab.datalinq.core;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -17,12 +17,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static java.util.Comparator.comparing;
+import static java.util.Comparator.comparingInt;
+
 /**
- * Scans the {@code sql/} root and turns each subfolder into an {@link Operation}.
+ * Scans an {@code sql/} root and turns each subfolder into an {@link Operation}.
  * <p>
  * Convention: folder {@code NN_Some_Name} -> order {@code NN}, label {@code "Some Name"}.
  * Type is inferred (see {@link #inferType}); an optional {@code operation.properties}
- * file can override description / target / handler / destructive / confirm.
+ * file can override description / source / target / table / handler / destructive / confirm.
  */
 public final class OperationScanner {
 
@@ -34,6 +37,10 @@ public final class OperationScanner {
         this.root = root;
     }
 
+    public Path root() {
+        return root;
+    }
+
     public List<Operation> scan() throws IOException {
         if (!Files.isDirectory(root)) {
             return List.of();
@@ -41,7 +48,7 @@ public final class OperationScanner {
         try (Stream<Path> dirs = Files.list(root)) {
             return dirs.filter(Files::isDirectory)
                     .map(this::toOperation)
-                    .sorted(Comparator.comparingInt(Operation::order).thenComparing(Operation::id))
+                    .sorted(comparingInt(Operation::order).thenComparing(Operation::id))
                     .toList();
         }
     }
@@ -56,7 +63,9 @@ public final class OperationScanner {
         Properties meta = loadMeta(dir);
 
         String description = meta.getProperty("description", "").trim();
-        String targetTable = meta.getProperty("target", "").trim();
+        String sourceDb = meta.getProperty("source", "").trim();      // datasource name
+        String targetDb = meta.getProperty("target", "").trim();      // datasource name
+        String targetTable = meta.getProperty("table", "").trim();    // ETL target table
         String handlerName = meta.getProperty("handler", "").trim();
         boolean destructive = Boolean.parseBoolean(meta.getProperty("destructive", "false").trim());
         String confirmText = meta.getProperty("confirm", "").trim();
@@ -65,7 +74,7 @@ public final class OperationScanner {
         OperationType type = inferType(typeHint, handlerName, sqlFiles);
 
         return new Operation(order, folder, displayName, description, type, dir, sqlFiles,
-                targetTable, handlerName, destructive, confirmText);
+                sourceDb, targetDb, targetTable, handlerName, destructive, confirmText);
     }
 
     private static OperationType inferType(String hint, String handlerName, List<Path> sqlFiles) {
@@ -92,7 +101,7 @@ public final class OperationScanner {
     private List<Path> listSql(Path dir) {
         try (Stream<Path> s = Files.list(dir)) {
             return s.filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".sql"))
-                    .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                    .sorted(comparing(p -> p.getFileName().toString()))
                     .toList();
         } catch (IOException e) {
             return List.of();
@@ -103,7 +112,7 @@ public final class OperationScanner {
         Properties p = new Properties();
         Path meta = dir.resolve("operation.properties");
         if (Files.exists(meta)) {
-            try (InputStream in = Files.newInputStream(meta)) {
+            try (Reader in = Files.newBufferedReader(meta, StandardCharsets.UTF_8)) {
                 p.load(in);
             } catch (IOException ignored) {
                 // treat as no metadata

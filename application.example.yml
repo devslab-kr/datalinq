@@ -1,16 +1,38 @@
 # Copy to application.yml and fill in. (application.yml is gitignored.)
-# You can also edit these from inside the app (DB Connection screen) and save.
+# You can also edit datasources from inside the app (DB Connection screen) and save.
 
-datasource:
-  source:                 # read side - MS SQL Server
-    url: jdbc:sqlserver://SRC_HOST:1433;databaseName=SRC_DB;encrypt=true;trustServerCertificate=true
+datasources:
+  # Each is a named connection; any can act as a source or a target (chosen per operation).
+  # Structured types (sqlserver / mariadb) build the JDBC URL from host/port/database.
+  legacy-erp:                 # MS SQL Server source
+    type: sqlserver
+    host: SRC_HOST
+    port: 1433
+    database: SRC_DB
     username: sa
     password: ""
-  target:                 # write side - MariaDB
-    url: jdbc:mariadb://TGT_HOST:3306/TGT_DB
+  new-core:                   # MariaDB (also connects to MySQL servers) target
+    type: mariadb
+    host: TGT_HOST
+    port: 3306
+    database: TGT_DB
     username: root
     password: ""
+  # custom type keeps a hand-written URL verbatim (legacy 'url:' without a type also works):
+  # other:
+  #   type: custom
+  #   url: jdbc:postgresql://HOST:5432/DB
+  #   username: app
+  #   password: ""
+
+defaults:
+  source: legacy-erp          # used when an operation does not set source=
+  target: new-core            # used when an operation does not set target=
 
 options:
   batch-size: 1000
   dry-run-default: true
+  language: en                # en | ko  (blank = system locale)
+  max-parallel: 4             # max operations run concurrently (virtual threads; bounds DB connections)
+  mask-password: true         # DB Connection screen: mask password values (false = show in plain)
+  # sql-dir: /path/to/sql     # external migration folder (blank = ./sql)
