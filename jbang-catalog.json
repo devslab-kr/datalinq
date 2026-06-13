@@ -2,7 +2,7 @@
   "aliases": {
     "datalinq": {
       "script-ref": "build/libs/datalinq.jar",
-      "description": "DataLinq - MS SQL Server -> MariaDB data-migration TUI (DevsLab Co., Ltd.)",
+      "description": "DataLinq - cross-vendor JDBC data-migration TUI (DevsLab Co., Ltd.)",
       "java-options": [
         "-Dstdout.encoding=UTF-8",
         "-Dstderr.encoding=UTF-8",
