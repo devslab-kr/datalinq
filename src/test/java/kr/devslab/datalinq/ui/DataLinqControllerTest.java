@@ -4,6 +4,7 @@
  */
 package kr.devslab.datalinq.ui;
 
+import kr.devslab.datalinq.config.JdbcUrls;
 import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.core.OperationType;
 import kr.devslab.datalinq.i18n.Messages;
@@ -53,7 +54,7 @@ class DataLinqControllerTest {
     /** In-memory gateway for both ports - records save/test calls, no JDBC, no config file. */
     private static final class FakeGateway
             implements DataLinqController.DatasourceGateway, DataLinqController.SettingsGateway {
-        final Map<String, String[]> ds = new LinkedHashMap<>(); // name -> [url, user, pass]
+        final Map<String, Map<String, String>> ds = new LinkedHashMap<>(); // name -> fields
         String defaultSource = "";
         String defaultTarget = "";
         String testResult; // null = success
@@ -70,22 +71,34 @@ class DataLinqControllerTest {
         int settingsSaves;
 
         FakeGateway with(String name, String url, String user, String pass) {
-            ds.put(name, new String[]{url, user, pass});
+            Map<String, String> m = new LinkedHashMap<>();
+            m.put("type", "custom");
+            m.put("url", url);
+            m.put("username", user);
+            m.put("password", pass);
+            ds.put(name, m);
             return this;
+        }
+
+        private String f(String name, String key) {
+            return ds.containsKey(name) ? ds.get(name).getOrDefault(key, "") : "";
         }
 
         @Override public List<String> names() {
             return new ArrayList<>(ds.keySet());
         }
         @Override public String url(String name) {
-            return ds.containsKey(name) ? ds.get(name)[0] : "";
+            String type = f(name, "type");
+            return JdbcUrls.isStructured(type)
+                    ? JdbcUrls.build(type, f(name, "host"), f(name, "port"), f(name, "database"))
+                    : f(name, "url");
         }
-        @Override public String username(String name) {
-            return ds.containsKey(name) ? ds.get(name)[1] : "";
-        }
-        @Override public String password(String name) {
-            return ds.containsKey(name) ? ds.get(name)[2] : "";
-        }
+        @Override public String type(String name)     { return f(name, "type"); }
+        @Override public String host(String name)     { return f(name, "host"); }
+        @Override public String port(String name)     { return f(name, "port"); }
+        @Override public String database(String name) { return f(name, "database"); }
+        @Override public String username(String name) { return f(name, "username"); }
+        @Override public String password(String name) { return f(name, "password"); }
         @Override public String defaultSource() {
             return defaultSource;
         }
@@ -94,13 +107,30 @@ class DataLinqControllerTest {
         }
         @Override public void save(String name, String url, String user, String pass,
                                    boolean asDefaultSource, boolean asDefaultTarget) {
-            ds.put(name, new String[]{url, user, pass});
+            Map<String, String> m = new LinkedHashMap<>();
+            m.put("type", "custom");
+            m.put("url", url);
+            m.put("username", user);
+            m.put("password", pass);
+            ds.put(name, m);
             if (asDefaultSource) {
                 defaultSource = name;
             }
             if (asDefaultTarget) {
                 defaultTarget = name;
             }
+            saves++;
+        }
+        @Override public void saveStructured(String name, String type, String host, String port,
+                                             String database, String user, String pass) {
+            Map<String, String> m = new LinkedHashMap<>();
+            m.put("type", type);
+            m.put("host", host);
+            m.put("port", port);
+            m.put("database", database);
+            m.put("username", user);
+            m.put("password", pass);
+            ds.put(name, m);
             saves++;
         }
         @Override public void setDefaultSource(String name) {
@@ -301,6 +331,17 @@ class DataLinqControllerTest {
         assertEquals("jdbc:new", gw.url("a"));
         assertEquals("a", gw.defaultSource());
         assertTrue(c.dbStatus().contains("a"));
+    }
+
+    @Test
+    void savingStructuredDatasourceDerivesTheUrl() {
+        FakeGateway gw = new FakeGateway();
+        DataLinqController c = controller(gw, (op, dry, log) -> 0);
+        c.saveDatasourceStructured("a", "mariadb", "localhost", "3306", "mydb", "root", "pw");
+        assertEquals("jdbc:mariadb://localhost:3306/mydb", gw.url("a"));
+        assertEquals("mariadb", c.dsType("a"));
+        assertEquals("localhost", c.dsHost("a"));
+        assertEquals("mydb", c.dsDatabase("a"));
     }
 
     @Test

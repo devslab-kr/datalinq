@@ -237,7 +237,7 @@ public final class Main {
     private static List<String> aboutLines(Messages msg) {
         return List.of(
                 "DataLinq  v0.1.0",
-                msg.get("app.subtitle") + "  ·  MS SQL Server -> MariaDB",
+                msg.get("app.subtitle"),
                 "",
                 "Built with TamboUI",
                 "https://github.com/tamboui/tamboui",

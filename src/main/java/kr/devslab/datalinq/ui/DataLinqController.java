@@ -44,6 +44,14 @@ public final class DataLinqController {
 
         String url(String name);
 
+        String type(String name);
+
+        String host(String name);
+
+        String port(String name);
+
+        String database(String name);
+
         String username(String name);
 
         String password(String name);
@@ -54,6 +62,9 @@ public final class DataLinqController {
 
         void save(String name, String url, String username, String password,
                   boolean asDefaultSource, boolean asDefaultTarget) throws Exception;
+
+        void saveStructured(String name, String type, String host, String port, String database,
+                            String username, String password) throws Exception;
 
         void setDefaultSource(String name) throws Exception;
 
@@ -205,6 +216,10 @@ public final class DataLinqController {
     }
 
     public String url(String name)      { return datasources.url(name); }
+    public String dsType(String name)     { return datasources.type(name); }
+    public String dsHost(String name)     { return datasources.host(name); }
+    public String dsPort(String name)     { return datasources.port(name); }
+    public String dsDatabase(String name) { return datasources.database(name); }
     public String username(String name) { return datasources.username(name); }
     public String password(String name) { return datasources.password(name); }
     public boolean isDefaultSource(String name) { return name != null && name.equals(datasources.defaultSource()); }
@@ -440,11 +455,23 @@ public final class DataLinqController {
         log(dbStatus);
     }
 
-    /** Persists a datasource (optionally as default source/target); updates {@link #dbStatus()}. */
+    /** Persists a custom (hand-written URL) datasource; updates {@link #dbStatus()}. */
     public void saveDatasource(String name, String url, String username, String password,
                                boolean asDefaultSource, boolean asDefaultTarget) {
         try {
             datasources.save(name, url, username, password, asDefaultSource, asDefaultTarget);
+            dbStatus = msg.get("status.saved", name);
+        } catch (Exception e) {
+            dbStatus = msg.get("status.saveFailed", name, e.getMessage());
+        }
+        log(dbStatus);
+    }
+
+    /** Persists a structured datasource (type + host/port/database); updates {@link #dbStatus()}. */
+    public void saveDatasourceStructured(String name, String type, String host, String port,
+                                         String database, String username, String password) {
+        try {
+            datasources.saveStructured(name, type, host, port, database, username, password);
             dbStatus = msg.get("status.saved", name);
         } catch (Exception e) {
             dbStatus = msg.get("status.saveFailed", name, e.getMessage());

@@ -4,6 +4,7 @@
  */
 package kr.devslab.datalinq.ui;
 
+import kr.devslab.datalinq.config.JdbcUrls;
 import kr.devslab.datalinq.core.Operation;
 import kr.devslab.datalinq.ui.DataLinqController.Entry;
 
@@ -50,11 +51,21 @@ public final class DataLinqApp extends ToolkitApp {
     private final ListElement<?> menu;
 
     // DB Connection screen view state: two panes (datasource list / edit fields) switched with
-    // Left/Right; Up/Down moves within the active pane. dbBuf holds the three edit buffers.
-    private final String[] dbBuf = {"", "", ""};
+    // Left/Right; Up/Down moves within the active pane. The edit fields are structured - a DB type
+    // selector plus host/port/database (or a raw URL for the custom type) and user/password.
     private boolean dbFieldsPane; // false = datasource list active, true = edit fields active
-    private int dbField;          // 0 = url, 1 = user, 2 = password (when in the fields pane)
+    private int dbField;          // index into the active field set (see dbSlots())
+    private String dbType = JdbcUrls.CUSTOM;
+    private String dbHost = "";
+    private String dbPort = "";
+    private String dbDatabase = "";
+    private String dbUrl = "";
+    private String dbUser = "";
+    private String dbPass = "";
     private DataLinqController.Screen lastScreen = DataLinqController.Screen.MAIN;
+
+    /** The editable fields of the DB form, in display order. */
+    private enum Slot { TYPE, URL, HOST, PORT, DATABASE, USER, PASSWORD }
 
     public DataLinqApp(DataLinqController controller, List<String> logo, List<String> about) {
         this.c = controller;
@@ -283,9 +294,46 @@ public final class DataLinqApp extends ToolkitApp {
 
     private void reseedDbFields() {
         String name = c.selectedDatasource();
-        dbBuf[0] = name == null ? "" : nullToEmpty(c.url(name));
-        dbBuf[1] = name == null ? "" : nullToEmpty(c.username(name));
-        dbBuf[2] = name == null ? "" : nullToEmpty(c.password(name));
+        if (name == null) {
+            dbType = JdbcUrls.CUSTOM;
+            dbHost = dbPort = dbDatabase = dbUrl = dbUser = dbPass = "";
+            return;
+        }
+        String type = c.dsType(name);
+        dbType = (type == null || type.isEmpty()) ? JdbcUrls.CUSTOM : type;
+        dbHost = nullToEmpty(c.dsHost(name));
+        dbPort = nullToEmpty(c.dsPort(name));
+        dbDatabase = nullToEmpty(c.dsDatabase(name));
+        dbUrl = nullToEmpty(c.url(name)); // custom: the raw URL; structured: the derived one (not edited)
+        dbUser = nullToEmpty(c.username(name));
+        dbPass = nullToEmpty(c.password(name));
+        clampDbField();
+    }
+
+    /** The visible field slots for the current type (custom shows a raw URL, else host/port/db). */
+    private List<Slot> dbSlots() {
+        List<Slot> slots = new ArrayList<>();
+        slots.add(Slot.TYPE);
+        if (JdbcUrls.CUSTOM.equals(dbType)) {
+            slots.add(Slot.URL);
+        } else {
+            slots.add(Slot.HOST);
+            slots.add(Slot.PORT);
+            slots.add(Slot.DATABASE);
+        }
+        slots.add(Slot.USER);
+        slots.add(Slot.PASSWORD);
+        return slots;
+    }
+
+    private void clampDbField() {
+        int n = dbSlots().size();
+        if (dbField >= n) {
+            dbField = n - 1;
+        }
+        if (dbField < 0) {
+            dbField = 0;
+        }
     }
 
     private Element dbScreen() {
@@ -309,14 +357,20 @@ public final class DataLinqApp extends ToolkitApp {
                     .title(c.msg().get("menu.dbConnection")).rounded()
                     .borderColor(dbFieldsPane ? Color.DARK_GRAY : Color.CYAN);
 
-            String[] labels = {c.msg().get("field.url"), c.msg().get("field.user"), c.msg().get("field.password")};
-            int labelWidth = Math.max(TextWidth.of(labels[0]), Math.max(TextWidth.of(labels[1]), TextWidth.of(labels[2])));
-            Element form = panel(column(
-                    fieldRow(labels[0], labelWidth, dbBuf[0], dbFieldsPane && dbField == 0, false),
-                    fieldRow(labels[1], labelWidth, dbBuf[1], dbFieldsPane && dbField == 1, false),
-                    fieldRow(labels[2], labelWidth, dbBuf[2], dbFieldsPane && dbField == 2, c.maskPassword()),
-                    text(c.dbStatus()).yellow())
-                    .spacing(1))
+            List<Slot> slots = dbSlots();
+            int labelWidth = 0;
+            for (Slot s : slots) {
+                labelWidth = Math.max(labelWidth, TextWidth.of(labelOf(s)));
+            }
+            List<Element> formRows = new ArrayList<>();
+            for (int i = 0; i < slots.size(); i++) {
+                formRows.add(slotRow(slots.get(i), labelWidth, dbFieldsPane && dbField == i));
+            }
+            if (JdbcUrls.isStructured(dbType)) {
+                formRows.add(text("URL: " + JdbcUrls.build(dbType, dbHost, dbPort, dbDatabase)).dim());
+            }
+            formRows.add(text(c.dbStatus()).yellow());
+            Element form = panel(column(formRows.toArray(new Element[0])).spacing(1))
                     .title(c.selectedDatasource()).rounded()
                     .borderColor(dbFieldsPane ? Color.CYAN : Color.DARK_GRAY);
 
@@ -399,25 +453,100 @@ public final class DataLinqApp extends ToolkitApp {
             dbFieldsPane = false;
             return EventResult.HANDLED;
         }
+        List<Slot> slots = dbSlots();
         if (e.code() == KeyCode.UP) {
             dbField = Math.max(0, dbField - 1);
             return EventResult.HANDLED;
         }
         if (e.code() == KeyCode.DOWN) {
-            dbField = Math.min(2, dbField + 1);
+            dbField = Math.min(slots.size() - 1, dbField + 1);
             return EventResult.HANDLED;
         }
-        if (e.code() == KeyCode.BACKSPACE) {
-            if (!dbBuf[dbField].isEmpty()) {
-                dbBuf[dbField] = dbBuf[dbField].substring(0, dbBuf[dbField].length() - 1);
+        Slot active = slots.get(Math.min(dbField, slots.size() - 1));
+        if (active == Slot.TYPE) {
+            if (isSpace(e)) { // cycle the DB type (changes which fields are shown)
+                cycleType();
+                return EventResult.HANDLED;
             }
+            return EventResult.UNHANDLED;
+        }
+        if (e.code() == KeyCode.BACKSPACE) {
+            editSlot(active, "", true);
             return EventResult.HANDLED;
         }
         if (e.code() == KeyCode.CHAR && e.string() != null) {
-            dbBuf[dbField] += e.string();
+            editSlot(active, e.string(), false);
             return EventResult.HANDLED;
         }
         return EventResult.UNHANDLED;
+    }
+
+    private void cycleType() {
+        int i = JdbcUrls.TYPES.indexOf(dbType);
+        dbType = JdbcUrls.TYPES.get((i + 1) % JdbcUrls.TYPES.size());
+        clampDbField();
+    }
+
+    private void editSlot(Slot s, String append, boolean backspace) {
+        switch (s) {
+            case URL -> dbUrl = edit(dbUrl, append, backspace);
+            case HOST -> dbHost = edit(dbHost, append, backspace);
+            case PORT -> dbPort = edit(dbPort, append, backspace);
+            case DATABASE -> dbDatabase = edit(dbDatabase, append, backspace);
+            case USER -> dbUser = edit(dbUser, append, backspace);
+            case PASSWORD -> dbPass = edit(dbPass, append, backspace);
+            case TYPE -> { /* selector, not text-editable */ }
+        }
+    }
+
+    private static String edit(String current, String append, boolean backspace) {
+        if (backspace) {
+            return current.isEmpty() ? current : current.substring(0, current.length() - 1);
+        }
+        return current + append;
+    }
+
+    private String labelOf(Slot s) {
+        return switch (s) {
+            case TYPE -> c.msg().get("field.type");
+            case URL -> c.msg().get("field.url");
+            case HOST -> c.msg().get("field.host");
+            case PORT -> c.msg().get("field.port");
+            case DATABASE -> c.msg().get("field.database");
+            case USER -> c.msg().get("field.user");
+            case PASSWORD -> c.msg().get("field.password");
+        };
+    }
+
+    private static String typeLabel(String type) {
+        return switch (type) {
+            case JdbcUrls.SQLSERVER -> "MS SQL Server";
+            case JdbcUrls.MARIADB -> "MariaDB / MySQL";
+            default -> "Custom (URL)";
+        };
+    }
+
+    private String slotValue(Slot s) {
+        return switch (s) {
+            case TYPE -> dbType;
+            case URL -> dbUrl;
+            case HOST -> dbHost;
+            case PORT -> dbPort;
+            case DATABASE -> dbDatabase;
+            case USER -> dbUser;
+            case PASSWORD -> dbPass;
+        };
+    }
+
+    private Element slotRow(Slot s, int labelWidth, boolean active) {
+        if (s == Slot.TYPE) {
+            var labelEl = text((active ? "> " : "  ") + TextWidth.pad(labelOf(s), labelWidth) + " : ");
+            var valueEl = text("◀ " + typeLabel(dbType) + " ▶"); // ◀ type ▶
+            return active ? row(labelEl.yellow().bold(), valueEl.yellow())
+                    : row(labelEl.white(), valueEl.white());
+        }
+        boolean mask = (s == Slot.PASSWORD) && c.maskPassword();
+        return fieldRow(labelOf(s), labelWidth, slotValue(s), active, mask);
     }
 
     private void doDbTest() {
@@ -425,17 +554,23 @@ public final class DataLinqApp extends ToolkitApp {
         if (name == null) {
             return;
         }
-        String url = dbBuf[0];
-        String user = dbBuf[1];
-        String pass = dbBuf[2];
+        String url = JdbcUrls.CUSTOM.equals(dbType)
+                ? dbUrl : JdbcUrls.build(dbType, dbHost, dbPort, dbDatabase);
+        String user = dbUser;
+        String pass = dbPass;
         c.markTesting(name);
         Thread.ofVirtual().start(() -> c.testConnection(name, url, user, pass));
     }
 
     private void doDbSave() {
         String name = c.selectedDatasource();
-        if (name != null) {
-            c.saveDatasource(name, dbBuf[0], dbBuf[1], dbBuf[2], false, false);
+        if (name == null) {
+            return;
+        }
+        if (JdbcUrls.CUSTOM.equals(dbType)) {
+            c.saveDatasource(name, dbUrl, dbUser, dbPass, false, false);
+        } else {
+            c.saveDatasourceStructured(name, dbType, dbHost, dbPort, dbDatabase, dbUser, dbPass);
         }
     }
 

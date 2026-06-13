@@ -37,6 +37,26 @@ public final class AppConfigDatasourceGateway implements DatasourceGateway, Sett
     }
 
     @Override
+    public String type(String name) {
+        return config.type(name);
+    }
+
+    @Override
+    public String host(String name) {
+        return config.host(name);
+    }
+
+    @Override
+    public String port(String name) {
+        return config.port(name);
+    }
+
+    @Override
+    public String database(String name) {
+        return config.database(name);
+    }
+
+    @Override
     public String username(String name) {
         return config.username(name);
     }
@@ -66,6 +86,13 @@ public final class AppConfigDatasourceGateway implements DatasourceGateway, Sett
         if (asDefaultTarget) {
             config.setDefaultTarget(name);
         }
+        config.save();
+    }
+
+    @Override
+    public void saveStructured(String name, String type, String host, String port, String database,
+                               String username, String password) throws Exception {
+        config.setDatasourceStructured(name, type, host, port, database, username, password);
         config.save();
     }
 

@@ -109,16 +109,48 @@ public final class AppConfig {
         return names;
     }
 
-    public String url(String datasource)      { return field(datasource, "url"); }
+    public String type(String datasource)     { return field(datasource, "type"); }
+    public String host(String datasource)     { return field(datasource, "host"); }
+    public String port(String datasource)     { return field(datasource, "port"); }
+    public String database(String datasource) { return field(datasource, "database"); }
     public String username(String datasource) { return field(datasource, "username"); }
     public String password(String datasource) { return field(datasource, "password"); }
 
+    /**
+     * The effective JDBC URL: built from {@code type/host/port/database} for a structured type,
+     * otherwise the stored {@code url} (a {@code custom} type, or a legacy datasource with no type).
+     */
+    public String url(String datasource) {
+        String type = field(datasource, "type");
+        if (JdbcUrls.isStructured(type)) {
+            return JdbcUrls.build(type, host(datasource), port(datasource), database(datasource));
+        }
+        return field(datasource, "url");
+    }
+
+    /** Stores a custom datasource (hand-written URL). */
     public void setDatasource(String name, String url, String username, String password) {
-        Map<String, Object> all = child(root, "datasources");
-        Map<String, Object> ds = child(all, name);
+        Map<String, Object> ds = child(child(root, "datasources"), name);
+        ds.put("type", JdbcUrls.CUSTOM);
         ds.put("url", url);
         ds.put("username", username);
         ds.put("password", password);
+        ds.remove("host");
+        ds.remove("port");
+        ds.remove("database");
+    }
+
+    /** Stores a structured datasource (type + host/port/database); the URL is derived. */
+    public void setDatasourceStructured(String name, String type, String host, String port,
+                                        String database, String username, String password) {
+        Map<String, Object> ds = child(child(root, "datasources"), name);
+        ds.put("type", type);
+        ds.put("host", host);
+        ds.put("port", port);
+        ds.put("database", database);
+        ds.put("username", username);
+        ds.put("password", password);
+        ds.remove("url");
     }
 
     @SuppressWarnings("unchecked")
