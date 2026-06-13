@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Unit tests for the MVC controller - no terminal, no database. */
 class DataLinqControllerTest {
 
-    private static final Messages MSG = Messages.load(Path.of("no-such-dir"), "en"); // keys returned as-is
+    private static final Messages MSG = Messages.load(Path.of("no-such-dir"), "en"); // bundled en defaults
 
     private static Operation migration(String name, boolean destructive) {
         return new Operation(0, name, name, "", OperationType.SCRIPT, Path.of("."),

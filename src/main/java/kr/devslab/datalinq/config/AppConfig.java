@@ -8,6 +8,8 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
@@ -67,6 +69,25 @@ public final class AppConfig {
         if (Files.exists(readFrom)) {
             try (Reader r = Files.newBufferedReader(readFrom, StandardCharsets.UTF_8)) {
                 Object loaded = new Yaml().load(r);
+                if (loaded instanceof Map<?, ?> m) {
+                    root = (Map<String, Object>) m;
+                }
+            }
+        }
+        return new AppConfig(saveTo, root);
+    }
+
+    /**
+     * Seeds from a bundled classpath resource (e.g. {@code /application.example.yml} baked into
+     * the jar) when no external config exists yet, while {@code saveTo} remains the
+     * {@link #save()} target so the first edit writes the user's own {@code application.yml}.
+     */
+    @SuppressWarnings("unchecked")
+    public static AppConfig loadResource(String resource, Path saveTo) throws IOException {
+        Map<String, Object> root = new LinkedHashMap<>();
+        try (InputStream in = AppConfig.class.getResourceAsStream(resource)) {
+            if (in != null) {
+                Object loaded = new Yaml().load(new InputStreamReader(in, StandardCharsets.UTF_8));
                 if (loaded instanceof Map<?, ?> m) {
                     root = (Map<String, Object>) m;
                 }

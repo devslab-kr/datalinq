@@ -13,6 +13,7 @@ import kr.devslab.datalinq.ui.DataLinqApp;
 import kr.devslab.datalinq.ui.DataLinqController;
 import kr.devslab.datalinq.ui.Logo;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -35,9 +36,7 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
         Home home = Home.detect();
-        Path configFile = home.resolve("application.yml"); // save target (or default in the install dir)
-        Path readFrom = Files.exists(configFile) ? configFile : home.resolve("application.example.yml");
-        AppConfig config = AppConfig.load(readFrom, configFile);
+        AppConfig config = loadConfig(home);
         Path sqlRoot = resolveSqlRoot(home, config);
 
         List<Operation> ops = new OperationScanner(sqlRoot).scan();
@@ -55,6 +54,23 @@ public final class Main {
                 System.exit(2);
             }
         }
+    }
+
+    /**
+     * Config precedence: an existing external {@code application.yml} (edits saved back to it),
+     * else an external {@code application.example.yml}, else the bundled example baked into the
+     * jar. In every case {@code save()} targets the external {@code application.yml}.
+     */
+    private static AppConfig loadConfig(Home home) throws IOException {
+        Path configFile = home.resolve("application.yml");
+        if (Files.exists(configFile)) {
+            return AppConfig.load(configFile);
+        }
+        Path example = home.resolve("application.example.yml");
+        if (Files.exists(example)) {
+            return AppConfig.load(example, configFile);
+        }
+        return AppConfig.loadResource("/application.example.yml", configFile);
     }
 
     private static Path resolveSqlRoot(Home home, AppConfig config) {

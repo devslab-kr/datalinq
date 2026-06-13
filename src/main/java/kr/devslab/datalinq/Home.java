@@ -19,12 +19,14 @@ import java.util.List;
  * <p>It searches an ordered list of base directories and, for each requested resource, returns
  * the first base that actually contains it (falling back to the primary base otherwise):
  * <ol>
- *   <li>the install directory - the parent of {@code lib/} that holds the running jar, i.e.
- *       {@code build/install/datalinq/} where the distribution bundles default resources; and</li>
- *   <li>the current working directory - so development runs (IDE / {@code gradle run}) and any
- *       user-edited files placed next to the launcher still take effect.</li>
+ *   <li>the directory holding the running jar - a dropped fat jar keeps {@code sql/} and any
+ *       overrides right next to {@code datalinq.jar};</li>
+ *   <li>the parent of {@code lib/} - an {@code installDist} image bundles the defaults there; and</li>
+ *   <li>the current working directory - so dev runs (IDE / {@code gradle}) and files placed in
+ *       whatever folder the app is launched from still take effect.</li>
  * </ol>
- * When running from exploded classes (no jar) only the working directory is used.
+ * Running from exploded classes (no jar) uses only the working directory. The jar also carries
+ * the defaults on its classpath, so a bare jar with no external files still renders correctly.
  */
 public final class Home {
 
@@ -35,11 +37,7 @@ public final class Home {
     }
 
     public static Home detect() {
-        List<Path> bases = new ArrayList<>();
-        Path install = installDir();
-        if (install != null) {
-            bases.add(install);
-        }
+        List<Path> bases = new ArrayList<>(jarBases());
         bases.add(Paths.get(System.getProperty("user.dir")));
         return new Home(bases);
     }
@@ -52,7 +50,7 @@ public final class Home {
         return new Home(List.copyOf(bases));
     }
 
-    /** The primary base: the install directory when packaged, else the working directory. */
+    /** The primary base: the jar's directory when packaged, else the working directory. */
     public Path base() {
         return bases.get(0);
     }
@@ -76,20 +74,36 @@ public final class Home {
         return primary;
     }
 
-    private static Path installDir() {
+    /**
+     * Resource bases derived from the running jar's location:
+     * <ul>
+     *   <li>the jar's own directory - a dropped fat jar keeps {@code sql/} and overrides beside it;</li>
+     *   <li>the parent of {@code lib/} - an {@code installDist} image bundles defaults there.</li>
+     * </ul>
+     * Empty when running from exploded classes (IDE / {@code gradle}); the working dir then applies.
+     */
+    private static List<Path> jarBases() {
+        List<Path> out = new ArrayList<>();
         try {
             CodeSource cs = Home.class.getProtectionDomain().getCodeSource();
-            if (cs == null || cs.getLocation() == null) {
-                return null;
+            if (cs != null && cs.getLocation() != null) {
+                Path location = Paths.get(cs.getLocation().toURI());
+                if (Files.isRegularFile(location)) { // a jar (fat jar, or <install>/lib/datalinq.jar)
+                    Path dir = location.getParent();
+                    if (dir != null) {
+                        out.add(dir);
+                        if ("lib".equals(String.valueOf(dir.getFileName()))) {
+                            Path install = dir.getParent();
+                            if (install != null) {
+                                out.add(install);
+                            }
+                        }
+                    }
+                }
             }
-            Path location = Paths.get(cs.getLocation().toURI());
-            if (Files.isRegularFile(location)) { // <install>/lib/datalinq.jar
-                Path lib = location.getParent();
-                return lib == null ? null : lib.getParent(); // <install>
-            }
-            return null; // exploded classes dir (IDE / gradle) -> fall back to the working dir
-        } catch (Exception e) {
-            return null;
+        } catch (Exception ignored) {
+            // running from exploded classes or an unreadable location -> rely on the working dir
         }
+        return out;
     }
 }

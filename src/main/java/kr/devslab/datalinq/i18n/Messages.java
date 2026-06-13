@@ -5,6 +5,8 @@
 package kr.devslab.datalinq.i18n;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,11 +16,12 @@ import java.util.Locale;
 import java.util.Properties;
 
 /**
- * Tiny i18n: loads {@code messages_<lang>.properties} (UTF-8) from an external {@code i18n/}
- * folder. English is always loaded first as the fallback base; the chosen language overlays
- * it, so missing translations fall back to English (and missing keys fall back to the key
- * itself). Pure file I/O - no {@code ResourceBundle} - so it is drop-in editable and
- * GraalVM native-image safe.
+ * Tiny i18n: loads {@code messages_<lang>.properties} (UTF-8). For each language the bundled
+ * classpath default ({@code /i18n/messages_<lang>.properties}, baked into the jar) loads first,
+ * then an external {@code i18n/} file overlays it - so a bare jar always has correct text and a
+ * user can override any string by dropping an edited file next to the app. English is the base
+ * for both layers, so missing translations fall back to English and missing keys to the key
+ * itself. Pure properties I/O - no {@code ResourceBundle} - so it stays GraalVM native-safe.
  *
  * <p>Add a language by dropping {@code messages_<lang>.properties} into {@code i18n/}.
  */
@@ -39,9 +42,11 @@ public final class Messages {
         String language = (lang == null || lang.isBlank())
                 ? Locale.getDefault().getLanguage() : lang.trim();
         Properties p = new Properties();
-        merge(p, i18nDir, "en");                  // base / fallback
+        mergeClasspath(p, "en");                  // bundled base / fallback (in the jar)
+        merge(p, i18nDir, "en");                  // external override
         if (!"en".equals(language)) {
-            merge(p, i18nDir, language);          // overlay chosen language
+            mergeClasspath(p, language);          // bundled chosen language
+            merge(p, i18nDir, language);          // external override of the chosen language
         }
         return new Messages(p);
     }
@@ -65,6 +70,17 @@ public final class Messages {
             } catch (IOException ignored) {
                 // keep whatever has loaded so far
             }
+        }
+    }
+
+    private static void mergeClasspath(Properties target, String lang) {
+        String resource = "/i18n/messages_" + lang + ".properties";
+        try (InputStream in = Messages.class.getResourceAsStream(resource)) {
+            if (in != null) {
+                target.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+            }
+        } catch (IOException ignored) {
+            // keep whatever has loaded so far
         }
     }
 }

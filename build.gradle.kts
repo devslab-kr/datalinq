@@ -1,5 +1,6 @@
 plugins {
     application
+    id("com.gradleup.shadow") version "9.4.2"
 }
 
 group = "kr.devslab"
@@ -45,6 +46,15 @@ tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
 
+// Bake the editable defaults INTO the jar (classpath) so a bare dropped jar runs with the
+// right logo + translations and zero setup. External files (next to the jar, or in the CWD)
+// still override these - see Home / the loaders. The repo-root copies stay the single source.
+tasks.processResources {
+    from("i18n") { into("i18n") }
+    from("branding") { into("branding") }
+    from("application.example.yml")
+}
+
 tasks.test {
     useJUnitPlatform()
 }
@@ -61,9 +71,28 @@ application {
     )
 }
 
-// The TUI reads from the real terminal; let `gradle run` pass stdin through.
+// The TUI reads from the real terminal; let `gradle run` / `gradle runShadow` pass stdin through.
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
+}
+tasks.named<JavaExec>("runShadow") {
+    standardInput = System.`in`
+}
+
+// The droppable deliverable: a single self-contained jar. mergeServiceFiles() is essential -
+// the JDBC drivers (java.sql.Driver) and our MigrationHandler register via ServiceLoader, and a
+// naive fat jar would keep only one service file. Stripping signature files avoids the signed-jar
+// SecurityException when driver jars are merged.
+tasks.shadowJar {
+    archiveBaseName = "datalinq"
+    archiveClassifier = ""
+    archiveVersion = ""
+    // duplicatesStrategy takes precedence over transformers: the default would drop the 2nd
+    // META-INF/services/java.sql.Driver (MariaDB's) before mergeServiceFiles() sees it, leaving
+    // only the MSSQL driver registered. INCLUDE lets the transformer merge both.
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    mergeServiceFiles()
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }
 
 // Bundle the editable default resources into the distribution image (alongside bin/ and lib/)
