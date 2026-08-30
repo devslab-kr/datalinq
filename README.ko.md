@@ -1,3 +1,5 @@
+[![DataLinq](.github/assets/readme-header.png)](https://devslab.kr/brand/open-source/)
+
 # DataLinq
 
 [English](README.md) | **한국어**
@@ -11,7 +13,7 @@ MariaDB/MySQL, PostgreSQL 드라이버는 **번들**되어 있고, 그 외(Oracl
 명령 한 줄로 내려받습니다. 연결은 **DB 종류 + host/port/database**(또는 raw URL)로 설정하며,
 `application.yml` 에 적거나 DB 연결 화면에서 바로 편집·저장할 수 있습니다.
 
-> **DevsLab Co., Ltd.** (주식회사 데브스랩) 제작 · https://devslab.kr · Apache-2.0
+> [DevsLab 오픈소스](https://devslab.kr/brand/open-source/) · **DevsLab Co., Ltd.** (주식회사 데브스랩) 제작 · https://devslab.kr · Apache-2.0
 
 ## 빠른 시작
 
