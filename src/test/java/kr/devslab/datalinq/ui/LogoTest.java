@@ -29,7 +29,7 @@ class LogoTest {
         assertEquals(List.of(8, 8, 26, 22), lines.stream().map(String::length).toList());
         assertEquals(26, lines.stream().mapToInt(String::length).max().orElseThrow());
         assertTrue(lines.stream().flatMapToInt(String::chars).allMatch(codePoint -> codePoint <= 0x7f));
-        assertFalse(lines.stream().anyMatch(line -> line.contains("\u001b[")));
+        assertFalse(lines.stream().anyMatch(line -> line.indexOf('\u001b') >= 0));
 
         String bundled = new String(Logo.class.getResourceAsStream("/branding/logo.txt").readAllBytes(), StandardCharsets.UTF_8);
         assertEquals(String.join("\n", lines) + "\n", bundled);
