@@ -7,10 +7,10 @@ const root = resolve(import.meta.dirname, '..');
 const guide = 'https://devslab.kr/brand/open-source/';
 const terminalLogo = 'DataLinq\n========\n[ source ] ===> [ target ]\nOpen source by DevsLab\n';
 const assets = new Map([
-  ['.github/assets/project-mark.svg', '6a5ddb30c2f0c6251d60a96f78b88f026e946aa7c5cda31284b29194f8482309'],
-  ['.github/assets/project-lockup.svg', '123d4746b874a955b6f4c4a9f1373a2b312b01016028703ff3257fcc0e0e2c6d'],
-  ['.github/assets/readme-header.png', 'cc5b10846a31c4c458ccd784fe158c83616368df0ffb645015561b059343267d'],
-  ['.github/assets/social-preview.png', '9b83784be89547d512a174853e7e8bbd56ea43975b076530ce930839b7067c3a'],
+  ['.github/assets/project-mark.svg', '51660ff854b4bd7e92d4ccc1929441c064f572d7a09ddac552fcd50c2fed789c'],
+  ['.github/assets/project-lockup.svg', 'fbb891d126f83aa46dd192cf9215e334e1cc1e9d6e21812235c0a4732d8e7228'],
+  ['.github/assets/readme-header.png', 'b2e6b2cc6234470d95a384efe98a80f3014398aa23dd91cffa0ea6dc9500db1d'],
+  ['.github/assets/social-preview.png', '924e95e70a2992253ee91314d1114237178e6dce89ce09b4b9eb4b49bc1361b4'],
   ['src/main/resources/branding/logo.txt', 'aa4aa8c9bcc2b07257f96854a481496b8229d28bc27057eedbadbce4fa1cc6d7'],
 ]);
 
@@ -19,13 +19,16 @@ const text = (relative) => readFile(file(relative), 'utf8');
 const hash = async (relative) => createHash('sha256').update(await readFile(file(relative))).digest('hex');
 
 for (const [relative, expected] of assets) {
-  assert.equal(await hash(relative), expected, `${relative} must match the oss-brand v0.1.1 O11 asset`);
+  assert.equal(await hash(relative), expected, `${relative} must match the oss-brand v0.2.0 O11 asset`);
 }
 
 const mark = await text('.github/assets/project-mark.svg');
 assert.match(mark, /data-oss-project="O11"/, 'project mark must identify O11');
-assert.match(mark, /M5 6H11V12H5Z/, 'project mark must retain O11 source column geometry');
-assert.match(mark, /M17 12L21 16L17 20/, 'project mark must retain O11 transfer path geometry');
+assert.match(mark, /data-layer="q-frame"/, 'project mark must use the shared Q frame');
+assert.match(mark, /<rect x="5" y="5" width="16" height="16" rx="2"/, 'project mark must retain the rear Q frame');
+assert.match(mark, /<rect x="11" y="11" width="16" height="16" rx="2"/, 'project mark must retain the front Q frame');
+assert.match(mark, /M13 15H24/, 'project mark must retain the O11 forward transfer path');
+assert.match(mark, /M25 21H14/, 'project mark must retain the O11 return transfer path');
 
 assert.equal(await text('src/main/resources/branding/logo.txt'), terminalLogo, 'bundled terminal logo must be the stable UTF-8 no-color O11 asset');
 assert.ok(!terminalLogo.includes('\u001b'), 'bundled terminal logo must contain no ANSI escape character');
@@ -52,4 +55,4 @@ for (const [relative, gradleCommand] of [
   assert.ok(brandIndex >= 0 && brandIndex < workflow.indexOf(gradleCommand), `${relative} must verify O11 brand sources before Gradle`);
 }
 
-console.log(`O11 brand contract passed (${assets.size} exact v0.1.1 assets, terminal, README, CI, and release).`);
+console.log(`O11 brand contract passed (${assets.size} exact v0.2.0 assets, terminal, README, CI, and release).`);
