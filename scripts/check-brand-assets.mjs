@@ -35,8 +35,8 @@ assert.ok(!terminalLogo.includes('\u001b'), 'bundled terminal logo must contain 
 assert.deepEqual(terminalLogo.trimEnd().split('\n').map((line) => line.length), [8, 8, 26, 22], 'terminal logo line widths must remain stable');
 
 for (const [relative, endorsement] of [
-  ['README.md', 'Open source by DevsLab'],
-  ['README.ko.md', 'DevsLab 오픈소스'],
+  ['README.md', 'Open source by [데브스랩(DevsLab)](https://devslab.kr/)'],
+  ['README.ko.md', 'Open source by [데브스랩(DevsLab)](https://devslab.kr/)'],
 ]) {
   const readme = await text(relative);
   assert.match(readme, /\.github\/assets\/readme-header\.png/, `${relative} must use the vendored O11 README header`);
