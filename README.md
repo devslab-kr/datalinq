@@ -13,7 +13,9 @@ MariaDB/MySQL and PostgreSQL drivers are **bundled**; others (Oracle, H2, SQLite
 one-line `driver` download away. Connections are configured by **DB type + host/port/database**
 (or a raw URL), in `application.yml` or live from the DB Connection screen.
 
-> [Open source by DevsLab](https://devslab.kr/brand/open-source/) · By **DevsLab Co., Ltd.** (주식회사 데브스랩) · https://devslab.kr · Apache-2.0
+<!-- publisher:start -->
+Open source by [데브스랩(DevsLab)](https://devslab.kr/).
+<!-- publisher:end -->
 
 ## Quick start
 
